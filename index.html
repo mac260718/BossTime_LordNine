@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ロードナイン ボス出現時間</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- React & Build Tools -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; overflow-x: hidden; }
+        .font-mono { font-family: 'JetBrains+Mono', monospace; }
+        input:focus { border-color: #ef4444; outline: none; box-shadow: 0 0 0 1px #ef4444; }
+        .btn-active:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- Firebase 設定 ---
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        const STORAGE_KEY = "L9_BOSS_TIMER_DATA";
+        const DRAFT_KEY = "L9_BOSS_TIMER_DRAFTS";
+        const appId = "lord-nine-boss-timer";
+
+        let db = null;
+        if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+            if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+        }
+
+        const { useState, useEffect, useMemo } = React;
+        const DAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+        // --- アイコン ---
+        const IconClock = ({color="currentColor", size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+        const IconSword = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l1-1"/></svg>;
+        const IconFlame = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>;
+        const IconMap = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
+
+        const BOSS_DATA_RAW = [
+            { lv: 60, name: "ベナトゥス", type: "interval", value: 10, area: "汚染された川筋", color: "red" },
+            { lv: 65, name: "ビオレント", type: "interval", value: 10, area: "エラ小川", color: "red" },
+            { lv: 70, name: "エゴ", type: "interval", value: 21, area: "奪還集結地", color: "red" },
+            { lv: 70, name: "クレメンティス", type: "weekly", schedule: [{ day: 1, time: "12:30" }, { day: 4, time: "20:00" }], area: "白の魔女のゆりかご", color: "red" },
+            { lv: 75, name: "リベラ", type: "interval", value: 24, area: "高い風の半島", color: "red" },
+            { lv: 75, name: "アラネオ", type: "interval", value: 24, area: "ティリロサ of 墓地地下1階", color: "red" },
+            { lv: 80, name: "アンドゥミエル", type: "interval", value: 24, area: "実験体研究室", color: "red" },
+            { lv: 80, name: "サピルス", type: "weekly", schedule: [{ day: 0, time: "18:00" }, { day: 2, time: "12:30" }], area: "月光の束縛", color: "red" },
+            { lv: 80, name: "ネウトロ", type: "weekly", schedule: [{ day: 2, time: "20:00" }, { day: 4, time: "12:30" }], area: "愛情の決戦", color: "red" },
+            { lv: 85, name: "レディ・ダリア", type: "interval", value: 18, area: "血染めの陰", color: "red" },
+            { lv: 85, name: "将軍アクレウス", type: "interval", value: 29, area: "ティリロサ of 墓地地下2階", color: "red" },
+            { lv: 85, name: "テュメレ", type: "weekly", schedule: [{ day: 1, time: "20:00" }, { day: 3, time: "12:30" }], area: "暴走の痕跡", color: "red" },
+            { lv: 88, name: "アメンティス", type: "interval", value: 29, area: "石灰岩の岬", color: "red" },
+            { lv: 88, name: "ブラウドモア", type: "interval", value: 32, area: "蔓薔薇の橋", color: "red" },
+            { lv: 90, name: "ミラベ", type: "weekly", schedule: [{ day: 6, time: "16:00" }], area: "ティリロサ of 墓地地下3階", color: "red" },
+            { lv: 93, name: "ワニタス", type: "interval", value: 48, area: "罠の沼地", color: "red" },
+            { lv: 93, name: "メトゥス", type: "interval", value: 48, area: "追従者の野原", color: "red" },
+            { lv: 93, name: "デュプリカン", type: "interval", value: 48, area: "操り人形の玉座", color: "red" },
+            { lv: 95, name: "シュライヤー", type: "interval", value: 35, area: "猟犬の仮面劇", color: "red" },
+            { lv: 95, name: "リンゴル", type: "weekly", schedule: [{ day: 6, time: "18:00" }], area: "松明街道", color: "red" },
+            { lv: 95, name: "ロデリック", type: "weekly", schedule: [{ day: 5, time: "20:00" }], area: "ガルバナ地下水路1階", color: "red" },
+            { lv: 98, name: "ガレス", type: "interval", value: 32, area: "死者の大地第1区域", color: "red" },
+            { lv: 98, name: "ティトル", type: "interval", value: 37, area: "死者の大地第2区域", color: "red" },
+            { lv: 98, name: "ラルバ", type: "interval", value: 35, area: "ガルバナ干拓地", color: "red" },
+            { lv: 100, name: "カテナ", type: "interval", value: 35, area: "死者の大地第3区域", color: "red" },
+            { lv: 100, name: "アウラーク", type: "weekly", schedule: [{ day: 5, time: "23:00" }, { day: 3, time: "22:00" }], area: "ガルバナ地下水路2階", color: "red" },
+            { lv: 100, name: "セクレタ", type: "interval", value: 62, area: "カリオンの墓", color: "red" },
+            { lv: 100, name: "オルド", type: "interval", value: 62, area: "後継者の楽園", color: "red" },
+            { lv: 100, name: "アスタ", type: "interval", value: 62, area: "黄金血の平原", color: "red" },
+            { lv: 100, name: "スポル", type: "interval", value: 62, area: "黄金血の平原", color: "red" },
+            { lv: 120, name: "シャイフロック", type: "weekly", schedule: [{ day: 6, time: "23:00" }], area: "カリオンの墓", color: "red" },
+            { lv: 120, name: "ベンジー", type: "weekly", schedule: [{ day: 0, time: "22:00" }], area: "復讐の巣", color: "red" },
+            { lv: 130, name: "リビティーナ", type: "weekly", schedule: [{ day: 1, time: "22:00" }, { day: 6, time: "22:00" }], area: "永遠なる従属の礼拝堂", color: "red" },
+            { lv: 130, name: "ラカゼス", type: "weekly", schedule: [{ day: 2, time: "23:00" }, { day: 0, time: "20:00" }], area: "セクレタの刑罰", color: "red" },
+            { lv: 135, name: "イカルシア", type: "weekly", schedule: [{ day: 2, time: "22:00" }, { day: 5, time: "22:00" }], area: "王家の谷", color: "red" },
+            { lv: 135, name: "モティ", type: "weekly", schedule: [{ day: 3, time: "20:00" }, { day: 6, time: "20:00" }], area: "エブリンの外庭", color: "red" },
+            { lv: 140, name: "ネバ", type: "weekly", schedule: [{ day: 0, time: "23:00" }], area: "セリンの中庭", color: "red" },
+            { lv: 140, name: "トゥミエル", type: "weekly", schedule: [{ day: 0, time: "20:00" }], area: "ガルバナ地下水路3階", color: "red" },
+            { lv: 60, name: "ラタン", type: "daily", times: ["12:00", "21:00"], area: "特殊出現", color: "purple" },
+            { lv: 85, name: "パルト", type: "daily", times: ["12:00", "21:00"], area: "特殊出現", color: "purple" },
+            { lv: 105, name: "ネドラ", type: "daily", times: ["12:00", "21:00"], area: "特殊出現", color: "purple" }
+        ].map((b, i) => ({ ...b, originalIndex: i }));
+
+        const formatToHHMM = (ts) => {
+            if (!ts) return "";
+            const d = new Date(ts);
+            return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+        };
+
+        const getNextWeeklyTime = (schedule) => {
+            const now = new Date();
+            const options = schedule.map(s => {
+                let next = new Date();
+                const [h, m] = s.time.split(':').map(Number);
+                next.setHours(h, m, 0, 0);
+                let dayDiff = s.day - now.getDay();
+                if (dayDiff < 0 || (dayDiff === 0 && next < now)) dayDiff += 7;
+                next.setDate(now.getDate() + dayDiff);
+                return next.getTime();
+            });
+            return Math.min(...options);
+        };
+
+        const getNextDailyTime = (times) => {
+            const now = new Date();
+            const options = times.map(t => {
+                let next = new Date();
+                const [h, m] = t.split(':').map(Number);
+                next.setHours(h, m, 0, 0);
+                if (next < now) next.setDate(now.getDate() + 1);
+                return next.getTime();
+            });
+            return Math.min(...options);
+        };
+
+        const formatCountdown = (ms) => {
+            if (ms <= 0) return <span className="text-red-500 font-bold animate-pulse">出現中</span>;
+            const totalSec = Math.floor(ms / 1000);
+            const h = Math.floor(totalSec / 3600);
+            const m = Math.floor((totalSec % 3600) / 60);
+            const s = totalSec % 60;
+            return `${h}h ${m}m ${s}s`;
+        };
+
+        const formatPredictedTime = (ts) => {
+            if (!ts) return "---";
+            const d = new Date(ts);
+            const now = new Date();
+            const isDifferentDay = d.getDate() !== now.getDate() || d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear();
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            return isDifferentDay ? `${DAYS[d.getDay()]} ${hh}:${mm}` : `${hh}:${mm}`;
+        };
+
+        const parseTimeInputToTimestamp = (timeStr) => {
+            if (!timeStr) return null;
+            let clean = timeStr.replace(/\D/g, '');
+            if (clean.length === 3) clean = '0' + clean;
+            if (clean.length !== 4) return null;
+            const h = parseInt(clean.substring(0, 2));
+            const m = parseInt(clean.substring(2, 4));
+            if (h >= 24 || m >= 60) return null;
+            const now = new Date();
+            const d = new Date();
+            d.setHours(h, m, 0, 0);
+            if (d.getTime() > now.getTime()) d.setDate(d.getDate() - 1);
+            return d.getTime();
+        };
+
+        function App() {
+            const [history, setHistory] = useState(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                return saved ? JSON.parse(saved) : {};
+            });
+            const [searchTerm, setSearchTerm] = useState('');
+            const [sortByTime, setSortByTime] = useState(false);
+            const [now, setNow] = useState(Date.now());
+            const [inputStates, setInputStates] = useState(() => {
+                const savedDrafts = localStorage.getItem(DRAFT_KEY);
+                return savedDrafts ? JSON.parse(savedDrafts) : {};
+            });
+
+            // 履歴データが変わった際、入力欄を更新
+            useEffect(() => {
+                const nextInputs = { ...inputStates };
+                let changed = false;
+                Object.keys(history).forEach(bossName => {
+                    // 入力欄が完全に空、または前回の記録に基づく自動セットを反映
+                    if (!nextInputs[bossName]) {
+                        nextInputs[bossName] = formatToHHMM(history[bossName].lastKill);
+                        changed = true;
+                    }
+                });
+                if (changed) setInputStates(nextInputs);
+            }, [history]);
+
+            useEffect(() => {
+                localStorage.setItem(DRAFT_KEY, JSON.stringify(inputStates));
+            }, [inputStates]);
+
+            useEffect(() => {
+                const interval = setInterval(() => setNow(Date.now()), 1000);
+                if (db) {
+                    const path = `artifacts/${appId}/public/data/boss_status`;
+                    const unsub = db.collection(path).onSnapshot(snapshot => {
+                        const data = {};
+                        snapshot.forEach(doc => { data[doc.id] = doc.data(); });
+                        setHistory(prev => {
+                            const newHistory = { ...prev, ...data };
+                            localStorage.setItem(STORAGE_KEY, JSON.stringify(newHistory));
+                            return newHistory;
+                        });
+                    });
+                    return () => { clearInterval(interval); unsub(); };
+                }
+                return () => clearInterval(interval);
+            }, []);
+
+            const handleSave = async (name) => {
+                const ts = parseTimeInputToTimestamp(inputStates[name]);
+                if (!ts) return;
+                const newData = { ...history, [name]: { lastKill: ts } };
+                setHistory(newData);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+
+                if (db) {
+                    try {
+                        await db.collection(`artifacts/${appId}/public/data/boss_status`).doc(name).set({ lastKill: ts }, { merge: true });
+                    } catch (e) { console.error(e); }
+                }
+            };
+
+            const setInputToNow = (name) => {
+                const d = new Date();
+                const hh = String(d.getHours()).padStart(2, '0');
+                const mm = String(d.getMinutes()).padStart(2, '0');
+                setInputStates(prev => ({ ...prev, [name]: `${hh}:${mm}` }));
+            };
+
+            const processedBosses = useMemo(() => {
+                return BOSS_DATA_RAW.map(boss => {
+                    let nextSpawn = 0;
+                    let lastRecordedTime = 0;
+                    if (boss.type === 'interval') {
+                        let last = history[boss.name]?.lastKill || 0;
+                        lastRecordedTime = last;
+                        const intervalMs = boss.value * 3600 * 1000;
+                        if (last !== 0) {
+                            while (last + intervalMs < now) { last += intervalMs; }
+                            nextSpawn = last + intervalMs;
+                        }
+                    } else if (boss.type === 'weekly') {
+                        nextSpawn = getNextWeeklyTime(boss.schedule);
+                    } else if (boss.type === 'daily') {
+                        nextSpawn = getNextDailyTime(boss.times);
+                    }
+                    return { ...boss, nextSpawn, lastRecordedTime };
+                });
+            }, [history, now]);
+
+            const top10Soon = useMemo(() => {
+                return processedBosses.filter(b => b.nextSpawn !== 0).sort((a, b) => a.nextSpawn - b.nextSpawn).slice(0, 10);
+            }, [processedBosses]);
+
+            const displayBosses = useMemo(() => {
+                return processedBosses
+                    .filter(b => b.name.includes(searchTerm) || b.area.includes(searchTerm))
+                    .sort((a, b) => sortByTime ? (a.nextSpawn - b.nextSpawn) : (a.originalIndex - b.originalIndex));
+            }, [processedBosses, searchTerm, sortByTime]);
+
+            return (
+                <div className="min-h-screen p-2 md:p-6 pb-20">
+                    <div className="max-w-6xl mx-auto">
+                        
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4 sticky top-0 bg-slate-950/95 py-2 z-30 shadow-md">
+                            <h1 className="text-xl font-bold text-red-500 flex items-center gap-2">
+                                <IconClock /> ロードナイン ボス出現時間
+                            </h1>
+                            <div className="flex items-center gap-2 w-full md:w-auto">
+                                <div className="relative flex-grow md:w-64">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                    </span>
+                                    <input 
+                                        type="text" 
+                                        placeholder="検索..." 
+                                        className="bg-slate-900 border border-slate-800 rounded-lg py-1.5 pl-9 pr-4 w-full text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                                <button 
+                                    onClick={() => setSortByTime(!sortByTime)}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${sortByTime ? 'bg-red-600 border-red-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-400'}`}
+                                >
+                                    {sortByTime ? "出現順表示" : "リスト順表示"}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="mb-8">
+                            <div className="flex items-center gap-2 mb-3 px-1 text-orange-500">
+                                <IconFlame />
+                                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">直近 10体</h2>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                                {top10Soon.map((boss, index) => {
+                                    const diff = boss.nextSpawn - now;
+                                    const active = diff <= 0;
+                                    return (
+                                        <div key={`top-${boss.name}`} className={`relative p-3 rounded-xl border transition-all duration-300 ${active ? 'bg-red-950/40 border-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'}`}>
+                                            <div className="absolute -top-2 -left-2 w-6 h-6 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-200 z-10 shadow-lg">
+                                                {index + 1}
+                                            </div>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-xs text-slate-300 font-mono font-bold bg-slate-950/40 px-1 rounded">{formatPredictedTime(boss.nextSpawn)}</span>
+                                                <span className={`text-[10px] px-1 rounded font-mono font-bold ${boss.color === 'purple' ? 'bg-purple-500/20 text-purple-300' : 'bg-red-500/20 text-red-300'}`}>
+                                                    Lv.{boss.lv}
+                                                </span>
+                                            </div>
+                                            <div className="font-bold text-base md:text-lg truncate text-white leading-tight mb-1">{boss.name}</div>
+                                            <div className="text-sm md:text-base font-mono font-bold text-slate-100 flex items-center gap-1.5 mt-1 border-t border-white/5 pt-1">
+                                                <IconClock color={active ? "#ef4444" : "#94a3b8"} size={14} />
+                                                {formatCountdown(diff)}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto bg-slate-900 rounded-xl border border-slate-800 shadow-2xl overflow-hidden">
+                            <table className="w-full text-left border-collapse min-w-[950px]">
+                                <thead className="bg-slate-950/50 border-b border-slate-800 text-slate-500 text-[11px] font-bold uppercase">
+                                    <tr>
+                                        <th className="p-4 w-12 text-center">No.</th>
+                                        <th className="p-4">Lv / 名前</th>
+                                        <th className="p-4">出現場所</th>
+                                        <th className="p-4 text-center">討伐時間入力 (00:00)</th>
+                                        <th className="p-4 text-center">予想時間</th>
+                                        <th className="p-4 text-right">カウントダウン</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {displayBosses.map((boss, index) => {
+                                        const diff = boss.nextSpawn - now;
+                                        const active = diff <= 0;
+                                        const unknown = boss.type === 'interval' && boss.nextSpawn === 0;
+
+                                        return (
+                                            <tr key={boss.name} className={`border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors ${active ? 'bg-red-950/20' : ''}`}>
+                                                <td className="p-4 text-[10px] font-mono text-slate-500 text-center">
+                                                    {sortByTime ? index + 1 : boss.originalIndex + 1}
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${boss.color === 'purple' ? 'bg-purple-500/20 text-purple-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                            {boss.lv}
+                                                        </span>
+                                                        <span className={`font-bold text-sm whitespace-nowrap ${active ? 'text-red-400' : ''}`}>{boss.name}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-xs text-slate-500">
+                                                    <div className="flex items-center gap-1 whitespace-nowrap">
+                                                        <IconMap /> {boss.area}
+                                                    </div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        {boss.type === 'interval' ? (
+                                                            <div className="flex items-center gap-1">
+                                                                <button 
+                                                                    onClick={() => setInputToNow(boss.name)}
+                                                                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-2 py-1.5 rounded-lg transition-all btn-active font-bold flex items-center gap-1 border border-slate-700"
+                                                                >
+                                                                    <IconSword /> 討伐
+                                                                </button>
+                                                                <input 
+                                                                    type="text" 
+                                                                    maxLength="5"
+                                                                    placeholder="00:00"
+                                                                    className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs w-20 text-slate-100 text-center font-mono cursor-pointer"
+                                                                    value={inputStates[boss.name] || ""}
+                                                                    onFocus={(e) => e.target.select()} // フォーカス時に全選択
+                                                                    onClick={(e) => e.target.select()} // クリック時に全選択
+                                                                    onChange={(e) => {
+                                                                        let v = e.target.value;
+                                                                        if (v.length === 2 && !v.includes(':') && e.nativeEvent.inputType !== 'deleteContentBackward') v += ':';
+                                                                        setInputStates(prev => ({ ...prev, [boss.name]: v }));
+                                                                    }}
+                                                                    onKeyDown={(e) => { if(e.key === 'Enter') handleSave(boss.name); }}
+                                                                />
+                                                                <button 
+                                                                    onClick={() => handleSave(boss.name)}
+                                                                    className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-1.5 rounded-lg transition-all btn-active font-bold shadow-md"
+                                                                >
+                                                                    保存
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-[10px] text-slate-600 italic font-mono">固定時刻</div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-center">
+                                                    <span className={`text-xs font-mono font-bold ${active ? 'text-red-400' : 'text-slate-400'}`}>
+                                                        {formatPredictedTime(boss.nextSpawn)}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 font-mono text-sm text-right font-bold">
+                                                    {unknown ? <span className="text-slate-700 italic text-xs">---</span> : formatCountdown(diff)}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="mt-4 text-[10px] text-slate-600 flex flex-col md:flex-row justify-between gap-2 opacity-50 px-1 border-t border-slate-800 pt-4">
+                            <p>※ 討伐ボタンでセットし保存で確定。入力枠をクリックすると全選択になり、上書き入力が可能です。</p>
+                            <p className="font-mono text-right uppercase">Lord Nine Boss Tracker v2.3.1</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
