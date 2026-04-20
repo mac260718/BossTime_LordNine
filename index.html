@@ -20,8 +20,8 @@
         .font-mono { font-family: 'JetBrains+Mono', monospace; }
         input:focus { border-color: #ef4444; outline: none; box-shadow: 0 0 0 1px #ef4444; }
         .btn-active:active { transform: scale(0.95); }
-        /* モバイルでの最小タップ高さを維持しつつ余白を削る */
-        button, input { min-height: 36px; }
+        /* 適度なタップ範囲を確保 */
+        button, input { min-height: 40px; }
         /* テーブルのスクロールバーを細く */
         .overflow-x-auto::-webkit-scrollbar { height: 4px; }
         .overflow-x-auto::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
@@ -53,9 +53,9 @@
         const DAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
         const IconClock = ({color="currentColor", size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
-        const IconSword = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l1-1"/></svg>;
+        const IconSword = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l1-1"/></svg>;
         const IconFlame = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>;
-        const IconMap = () => <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
+        const IconMap = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
 
         const BOSS_DATA_RAW = [
             { lv: 60, name: "ベナトゥス", type: "interval", value: 10, area: "汚染された川筋", color: "red" },
@@ -261,7 +261,8 @@
             const top10Soon = useMemo(() => {
                 return processedBosses
                     .filter(b => b.nextSpawn !== 0)
-                    .filter(b => topLvFilter === 'ALL' || (b.lv >= 60 && b.lv <= 100))
+                    // Lv.105 ネドラのみ例外としてフィルターをかけない
+                    .filter(b => topLvFilter === 'ALL' || (b.lv >= 60 && b.lv <= 100) || b.name === 'ネドラ')
                     .sort((a, b) => a.nextSpawn - b.nextSpawn)
                     .slice(0, 10);
             }, [processedBosses, topLvFilter]);
@@ -320,6 +321,9 @@
                                     const active = diff <= 0;
                                     return (
                                         <div key={`top-${boss.name}`} className={`relative p-2.5 rounded-xl border transition-all ${active ? 'bg-red-950/40 border-red-500 animate-pulse' : 'bg-slate-900/50 border-slate-800'}`}>
+                                            <div className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center text-[8px] font-bold text-slate-400 shadow-lg z-10">
+                                                {index + 1}
+                                            </div>
                                             <div className="flex justify-between items-center mb-1">
                                                 <span className="text-[9px] text-slate-400 font-mono font-bold bg-slate-950/50 px-1 rounded">{formatCountdown(diff, true)}</span>
                                                 <span className={`text-[9px] font-bold ${boss.color === 'purple' ? 'text-purple-400' : 'text-red-400'}`}>Lv.{boss.lv}</span>
@@ -398,8 +402,8 @@
                         </div>
 
                         <div className="mt-6 text-[10px] text-slate-600 flex justify-between opacity-50 px-1 border-t border-slate-800 pt-4">
-                            <p>※ スマホ向けに余白を詰めました。全端末でリアルタイム同期中です。</p>
-                            <p className="font-mono italic uppercase">L9 Tracker v2.4.2</p>
+                            <p>※ ネドラ(Lv.105)はフィルターに関わらず常に表示されるように修正しました。</p>
+                            <p className="font-mono italic uppercase">L9 Tracker v2.4.6</p>
                         </div>
                     </div>
                 </div>
