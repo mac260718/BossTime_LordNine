@@ -207,17 +207,24 @@
                 return () => { unsubPromise.then(u => u && u()); clearInterval(interval); };
             }, []);
 
+            // クラウドから新しいデータが来たら、入力欄に「討伐時間＋2分」をセットして更新
             useEffect(() => {
                 const nextInputs = { ...inputStates };
                 let changed = false;
+
                 Object.keys(history).forEach(bossName => {
                     const currentLastKill = history[bossName]?.lastKill;
                     const prevLastKill = prevHistoryRef.current[bossName]?.lastKill;
+
+                    // データが更新された場合、または入力欄が空の場合
                     if (currentLastKill !== prevLastKill || !nextInputs[bossName]) {
-                        nextInputs[bossName] = formatToHHMM(currentLastKill);
+                        // 討伐時間(currentLastKill)に2分(120,000ms)加算してセット
+                        const displayTime = currentLastKill + (2 * 60 * 1000);
+                        nextInputs[bossName] = formatToHHMM(displayTime);
                         changed = true;
                     }
                 });
+
                 if (changed) setInputStates(nextInputs);
                 prevHistoryRef.current = history;
             }, [history]);
@@ -261,7 +268,6 @@
             const top10Soon = useMemo(() => {
                 return processedBosses
                     .filter(b => b.nextSpawn !== 0)
-                    // Lv.105 ネドラのみ例外としてフィルターをかけない
                     .filter(b => topLvFilter === 'ALL' || (b.lv >= 60 && b.lv <= 100) || b.name === 'ネドラ')
                     .sort((a, b) => a.nextSpawn - b.nextSpawn)
                     .slice(0, 10);
@@ -325,7 +331,7 @@
                                                 {index + 1}
                                             </div>
                                             <div className="flex justify-between items-center mb-1">
-                                                <span className="text-[9px] text-slate-400 font-mono font-bold bg-slate-950/50 px-1 rounded">{formatCountdown(diff, true)}</span>
+                                                <span className="text-[9px] text-slate-400 font-mono font-bold bg-slate-950/40 px-1 rounded">{formatCountdown(diff, true)}</span>
                                                 <span className={`text-[9px] font-bold ${boss.color === 'purple' ? 'text-purple-400' : 'text-red-400'}`}>Lv.{boss.lv}</span>
                                             </div>
                                             <div className="font-bold text-xs md:text-sm truncate text-white leading-tight mb-1">{boss.name}</div>
@@ -340,13 +346,14 @@
                         </div>
 
                         <div className="overflow-x-auto bg-slate-900 rounded-xl border border-slate-800 shadow-2xl">
-                            <table className="w-full text-left border-collapse min-w-[680px]">
+                            <table className="w-full text-left border-collapse min-w-[850px]">
                                 <thead className="bg-slate-950/50 border-b border-slate-800 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
                                     <tr>
                                         <th className="px-2 py-3 w-8 text-center">No.</th>
                                         <th className="px-2 py-3">Lv / 名前</th>
                                         <th className="px-2 py-3 text-center w-[220px]">討伐時間入力</th>
                                         <th className="px-2 py-3 text-center">予想時間</th>
+                                        <th className="px-2 py-3 text-center">周期・時間</th>
                                         <th className="px-2 py-3 text-right">出現場所</th>
                                     </tr>
                                 </thead>
@@ -389,6 +396,19 @@
                                                         {formatPredictedTime(boss.nextSpawn)}
                                                     </span>
                                                 </td>
+                                                <td className="px-2 py-2.5 text-center text-[10px] text-slate-400 font-mono whitespace-nowrap">
+                                                    {boss.type === 'interval' ? (
+                                                        <span>{boss.value}時間後</span>
+                                                    ) : boss.type === 'weekly' ? (
+                                                        <div className="flex flex-col">
+                                                            {boss.schedule.map((s, i) => (
+                                                                <span key={i}>{DAYS[s.day]} {s.time}</span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <span>毎日 {boss.times.join(', ')}</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-2 py-2.5 text-right">
                                                     <div className="flex items-center justify-end gap-1 whitespace-nowrap text-[10px] text-slate-500">
                                                         <IconMap /> {boss.area}
@@ -402,8 +422,8 @@
                         </div>
 
                         <div className="mt-6 text-[10px] text-slate-600 flex justify-between opacity-50 px-1 border-t border-slate-800 pt-4">
-                            <p>※ ネドラ(Lv.105)はフィルターに関わらず常に表示されるように修正しました。</p>
-                            <p className="font-mono italic uppercase">L9 Tracker v2.4.6</p>
+                            <p>※ クラウド更新時、入力欄には「前回の討伐＋2分」が自動セットされます。</p>
+                            <p className="font-mono italic uppercase">L9 Tracker v2.5.0</p>
                         </div>
                     </div>
                 </div>
