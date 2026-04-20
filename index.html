@@ -210,10 +210,9 @@
                 if (!editingBoss) return;
                 
                 let ts = 0;
-                // 入力が空白でない場合のみパースを行う
                 if (editingBoss.tempTime && editingBoss.tempTime.trim() !== "") {
                     ts = parseTimeInputToTimestamp(editingBoss.tempTime);
-                    if (!ts) return; // 不正な形式の場合は何もしない
+                    if (!ts) return; 
                 }
 
                 const bossName = editingBoss.name;
@@ -255,11 +254,28 @@
                 });
             }, [history, now]);
 
-            const top10Soon = useMemo(() => {
-                return processedBosses
-                    .filter(b => b.nextSpawn !== 0)
-                    .filter(b => topLvFilter === 'ALL' || (b.lv >= 60 && b.lv <= 100) || b.name === 'ネドラ')
-                    .sort((a, b) => a.nextSpawn - b.nextSpawn)
+            // 直近10体のイベントリスト作成 (次回と次々回を含める)
+            const top10SoonEvents = useMemo(() => {
+                const events = [];
+                processedBosses.forEach(boss => {
+                    if (boss.nextSpawn === 0) return;
+                    
+                    // フィルター条件
+                    if (!(topLvFilter === 'ALL' || (boss.lv >= 60 && boss.lv <= 100) || boss.name === 'ネドラ')) return;
+
+                    // 1つ目の出現予定 (次回)
+                    events.push({ ...boss, eventTime: boss.nextSpawn, label: "次" });
+
+                    // 2つ目の出現予定 (次々回) - インターバル形式のみ対応
+                    if (boss.type === 'interval') {
+                        const intervalMs = boss.value * 3600 * 1000;
+                        events.push({ ...boss, eventTime: boss.nextSpawn + intervalMs, label: "次々" });
+                    }
+                    // 固定時間の場合は、本来は次のスケジュールを探すべきだが簡略化
+                });
+
+                return events
+                    .sort((a, b) => a.eventTime - b.eventTime)
                     .slice(0, 10);
             }, [processedBosses, topLvFilter]);
 
@@ -301,7 +317,7 @@
                             <div className="flex items-center justify-between mb-3 px-1">
                                 <div className="flex items-center gap-2 text-slate-400">
                                     <IconFlame />
-                                    <h2 className="text-xs font-bold uppercase tracking-widest">直近 10 体</h2>
+                                    <h2 className="text-xs font-bold uppercase tracking-widest">直近 10 体 (次々回含む)</h2>
                                 </div>
                                 <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
                                     {['ALL', '60-100'].map(f => (
@@ -310,27 +326,34 @@
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 md:gap-3">
-                                {top10Soon.map((boss, index) => {
-                                    const diff = boss.nextSpawn - now;
+                                {top10SoonEvents.map((event, index) => {
+                                    const diff = event.eventTime - now;
                                     const active = diff <= 0;
-                                    const lastKillTimeDisplay = formatToHHMM(boss.displayLastKill);
+                                    // 記録の表示用時間はイベントそのものではなく現在計算されている boss の lastKill を基準にする
+                                    const lastKillTimeDisplay = formatToHHMM(event.displayLastKill);
+
                                     return (
                                         <div 
-                                            key={`top-${boss.name}`} 
-                                            onClick={() => boss.type === 'interval' && setEditingBoss({ name: boss.name, tempTime: lastKillTimeDisplay })}
+                                            key={`top-${event.name}-${event.eventTime}`} 
+                                            onClick={() => event.type === 'interval' && setEditingBoss({ name: event.name, tempTime: formatToHHMM(history[event.name]?.lastKill) })}
                                             className={`relative p-2.5 rounded-xl border cursor-pointer transition-all ${active ? 'bg-red-950/40 border-red-500 animate-pulse' : 'bg-slate-900/50 border-slate-800 hover:border-slate-600'}`}
                                         >
                                             <div className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center text-[8px] font-bold text-slate-400 shadow-lg z-10">
                                                 {index + 1}
                                             </div>
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="text-[9px] text-slate-400 font-mono font-bold bg-slate-950/40 px-1 rounded">{formatCountdown(diff, true)}</span>
-                                                <span className={`text-[9px] font-bold ${boss.color === 'purple' ? 'text-purple-400' : 'text-red-400'}`}>Lv.{boss.lv}</span>
+                                            {/* 次・次々のラベル表示 */}
+                                            <div className="absolute top-1 right-1 px-1 bg-slate-800/80 rounded text-[7px] text-slate-500 font-bold uppercase tracking-tighter">
+                                                {event.label}
                                             </div>
-                                            <div className="font-bold text-xs md:text-sm truncate text-white leading-tight mb-1">{boss.name}</div>
+
+                                            <div className="flex justify-between items-center mb-1 pr-4">
+                                                <span className="text-[9px] text-slate-400 font-mono font-bold bg-slate-950/40 px-1 rounded">{formatCountdown(diff, true)}</span>
+                                                <span className={`text-[9px] font-bold ${event.color === 'purple' ? 'text-purple-400' : 'text-red-400'}`}>Lv.{event.lv}</span>
+                                            </div>
+                                            <div className="font-bold text-xs md:text-sm truncate text-white leading-tight mb-1">{event.name}</div>
                                             <div className="text-sm md:text-base font-mono font-bold text-slate-100 flex items-center gap-1.5 mt-1 border-t border-white/5 pt-1">
                                                 <IconClock color={active ? "#ef4444" : "#94a3b8"} size={12} />
-                                                {formatPredictedTime(boss.nextSpawn)}
+                                                {formatPredictedTime(event.eventTime)}
                                             </div>
                                         </div>
                                     );
@@ -413,8 +436,8 @@
                         </div>
 
                         <div className="text-[10px] text-slate-600 flex justify-between opacity-50 px-1 border-t border-slate-800 pt-4 mb-4">
-                            <p>※ 記録を空白にして「保存」するとリセットされます。全端末でリアルタイム同期中です。</p>
-                            <p className="font-mono italic uppercase text-right">L9 Tracker v2.5.9</p>
+                            <p>※ 短サイクルのボスは「次々回」の予定も直近リストに表示されます。</p>
+                            <p className="font-mono italic uppercase text-right">L9 Tracker v2.6.0</p>
                         </div>
                     </div>
 
@@ -430,7 +453,7 @@
                                 </div>
                                 <div className="p-6">
                                     <div className="mb-6 text-center">
-                                        <label className="block text-[10px] text-slate-500 mb-2 uppercase font-bold tracking-widest">討伐時間 (空で保存＝リセット)</label>
+                                        <label className="block text-[10px] text-slate-500 mb-2 uppercase font-bold tracking-widest">討伐時間 (4桁入力)</label>
                                         <input 
                                             type="text" 
                                             inputmode="numeric"
