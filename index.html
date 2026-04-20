@@ -21,7 +21,7 @@
         input:focus { border-color: #ef4444; outline: none; box-shadow: 0 0 0 1px #ef4444; }
         .btn-active:active { transform: scale(0.95); }
         /* モバイルでのタップ範囲確保 */
-        button, input { min-height: 38px; }
+        button, input { min-height: 40px; }
     </style>
 </head>
 <body>
@@ -38,7 +38,6 @@
             appId: "1:219594241322:web:208697256124c79e815a53"
         };
         const STORAGE_KEY = "L9_BOSS_TIMER_DATA";
-        const DRAFT_KEY = "L9_BOSS_TIMER_DRAFTS";
         const appId = "lord-nine-boss-timer";
 
         // Firebase初期化
@@ -63,27 +62,27 @@
             { lv: 70, name: "エゴ", type: "interval", value: 21, area: "奪還集結地", color: "red" },
             { lv: 70, name: "クレメンティス", type: "weekly", schedule: [{ day: 1, time: "12:30" }, { day: 4, time: "20:00" }], area: "白の魔女のゆりかご", color: "red" },
             { lv: 75, name: "リベラ", type: "interval", value: 24, area: "高い風の半島", color: "red" },
-            { lv: 75, name: "アラネオ", type: "interval", value: 24, area: "ティリロサ of 墓地地下1階", color: "red" },
+            { lv: 75, name: "アラネオ", type: "interval", value: 24, area: "ティリロサ of 墓地地下 1 階", color: "red" },
             { lv: 80, name: "アンドゥミエル", type: "interval", value: 24, area: "実験体研究室", color: "red" },
             { lv: 80, name: "サピルス", type: "weekly", schedule: [{ day: 0, time: "18:00" }, { day: 2, time: "12:30" }], area: "月光の束縛", color: "red" },
             { lv: 80, name: "ネウトロ", type: "weekly", schedule: [{ day: 2, time: "20:00" }, { day: 4, time: "12:30" }], area: "愛情の決戦", color: "red" },
             { lv: 85, name: "レディ・ダリア", type: "interval", value: 18, area: "血染めの陰", color: "red" },
-            { lv: 85, name: "将軍アクレウス", type: "interval", value: 29, area: "ティリロサ of 墓地地下2階", color: "red" },
+            { lv: 85, name: "将軍アクレウス", type: "interval", value: 29, area: "ティリロサ of 墓地地下 2 階", color: "red" },
             { lv: 85, name: "テュメレ", type: "weekly", schedule: [{ day: 1, time: "20:00" }, { day: 3, time: "12:30" }], area: "暴走の痕跡", color: "red" },
             { lv: 88, name: "アメンティス", type: "interval", value: 29, area: "石灰岩の岬", color: "red" },
             { lv: 88, name: "ブラウドモア", type: "interval", value: 32, area: "蔓薔薇の橋", color: "red" },
-            { lv: 90, name: "ミラベ", type: "weekly", schedule: [{ day: 6, time: "16:00" }], area: "ティリロサ of 墓地地下3階", color: "red" },
+            { lv: 90, name: "ミラベ", type: "weekly", schedule: [{ day: 6, time: "16:00" }], area: "ティリロサ of 墓地地下 3 階", color: "red" },
             { lv: 93, name: "ワニタス", type: "interval", value: 48, area: "罠の沼地", color: "red" },
             { lv: 93, name: "メトゥス", type: "interval", value: 48, area: "追従者の野原", color: "red" },
             { lv: 93, name: "デュプリカン", type: "interval", value: 48, area: "操り人形の玉座", color: "red" },
             { lv: 95, name: "シュライヤー", type: "interval", value: 35, area: "猟犬の仮面劇", color: "red" },
             { lv: 95, name: "リンゴル", type: "weekly", schedule: [{ day: 6, time: "18:00" }], area: "松明街道", color: "red" },
-            { lv: 95, name: "ロデリック", type: "weekly", schedule: [{ day: 5, time: "20:00" }], area: "ガルバナ地下水路1階", color: "red" },
-            { lv: 98, name: "ガレス", type: "interval", value: 32, area: "死者の大地第1区域", color: "red" },
-            { lv: 98, name: "ティトル", type: "interval", value: 37, area: "死者の大地第2区域", color: "red" },
+            { lv: 95, name: "ロデリック", type: "weekly", schedule: [{ day: 5, time: "20:00" }], area: "ガルバナ地下水路 1 階", color: "red" },
+            { lv: 98, name: "ガレス", type: "interval", value: 32, area: "死者の大地第 1 区域", color: "red" },
+            { lv: 98, name: "ティトル", type: "interval", value: 37, area: "死者の大地第 2 区域", color: "red" },
             { lv: 98, name: "ラルバ", type: "interval", value: 35, area: "ガルバナ干拓地", color: "red" },
-            { lv: 100, name: "カテナ", type: "interval", value: 35, area: "死者の大地第3区域", color: "red" },
-            { lv: 100, name: "アウラーク", type: "weekly", schedule: [{ day: 5, time: "23:00" }, { day: 3, time: "22:00" }], area: "ガルバナ地下水路2階", color: "red" },
+            { lv: 100, name: "カテナ", type: "interval", value: 35, area: "死者の大地第 3 区域", color: "red" },
+            { lv: 100, name: "アウラーク", type: "weekly", schedule: [{ day: 5, time: "23:00" }, { day: 3, time: "22:00" }], area: "ガルバナ地下水路 2 階", color: "red" },
             { lv: 100, name: "セクレタ", type: "interval", value: 62, area: "カリオンの墓", color: "red" },
             { lv: 100, name: "オルド", type: "interval", value: 62, area: "後継者の楽園", color: "red" },
             { lv: 100, name: "アスタ", type: "interval", value: 62, area: "黄金血の平原", color: "red" },
@@ -95,7 +94,7 @@
             { lv: 135, name: "イカルシア", type: "weekly", schedule: [{ day: 2, time: "22:00" }, { day: 5, time: "22:00" }], area: "王家の谷", color: "red" },
             { lv: 135, name: "モティ", type: "weekly", schedule: [{ day: 3, time: "20:00" }, { day: 6, time: "20:00" }], area: "エブリンの外庭", color: "red" },
             { lv: 140, name: "ネバ", type: "weekly", schedule: [{ day: 0, time: "23:00" }], area: "セリンの中庭", color: "red" },
-            { lv: 140, name: "トゥミエル", type: "weekly", schedule: [{ day: 0, time: "20:00" }], area: "ガルバナ地下水路3階", color: "red" },
+            { lv: 140, name: "トゥミエル", type: "weekly", schedule: [{ day: 0, time: "20:00" }], area: "ガルバナ地下水路 3 階", color: "red" },
             { lv: 60, name: "ラタン", type: "daily", times: ["12:00", "21:00"], area: "特殊出現", color: "purple" },
             { lv: 85, name: "パルト", type: "daily", times: ["12:00", "21:00"], area: "特殊出現", color: "purple" },
             { lv: 105, name: "ネドラ", type: "daily", times: ["12:00", "21:00"], area: "特殊出現", color: "purple" }
@@ -133,12 +132,13 @@
             return Math.min(...options);
         };
 
-        const formatCountdown = (ms) => {
+        const formatCountdown = (ms, short = false) => {
             if (ms <= 0) return <span className="text-red-500 font-bold animate-pulse">出現中</span>;
             const totalSec = Math.floor(ms / 1000);
             const h = Math.floor(totalSec / 3600);
             const m = Math.floor((totalSec % 3600) / 60);
             const s = totalSec % 60;
+            if (short) return `${h}h ${m}m`;
             return `${h}h ${m}m ${s}s`;
         };
 
@@ -154,7 +154,6 @@
 
         const parseTimeInputToTimestamp = (timeStr) => {
             if (!timeStr) return null;
-            // 数字だけを抽出（全角も半角も対応）
             let clean = timeStr.replace(/\D/g, '');
             if (clean.length === 3) clean = '0' + clean;
             if (clean.length < 4) return null;
@@ -175,11 +174,11 @@
             });
             const [searchTerm, setSearchTerm] = useState('');
             const [sortByTime, setSortByTime] = useState(false);
+            const [topLvFilter, setTopLvFilter] = useState('ALL'); // Top10用のフィルター
             const [now, setNow] = useState(Date.now());
             const [inputStates, setInputStates] = useState({});
             const [isOnline, setIsOnline] = useState(false);
 
-            // 前回の履歴を保持して変更検知に使用
             const prevHistoryRef = useRef({});
 
             useEffect(() => {
@@ -189,21 +188,18 @@
                         setIsOnline(true);
                         const path = `artifacts/${appId}/public/data/boss_status`;
                         
-                        // リアルタイムリスナーの確立
-                        const unsub = db.collection(path).onSnapshot(snapshot => {
+                        return db.collection(path).onSnapshot(snapshot => {
                             const data = {};
                             snapshot.forEach(doc => { data[doc.id] = doc.data(); });
-                            
                             setHistory(prev => {
                                 const newHistory = { ...prev, ...data };
                                 localStorage.setItem(STORAGE_KEY, JSON.stringify(newHistory));
                                 return newHistory;
                             });
                         }, err => {
-                            console.error("Firebase sync error", err);
+                            console.error("Firebase error", err);
                             setIsOnline(false);
                         });
-                        return unsub;
                     } catch (e) { 
                         console.error("Auth error", e); 
                         setIsOnline(false);
@@ -219,7 +215,6 @@
                 };
             }, []);
 
-            // 履歴データが外部（Firebase）から更新された際に入力欄を同期する
             useEffect(() => {
                 const nextInputs = { ...inputStates };
                 let changed = false;
@@ -228,39 +223,30 @@
                     const currentLastKill = history[bossName]?.lastKill;
                     const prevLastKill = prevHistoryRef.current[bossName]?.lastKill;
 
-                    // 新しくデータが保存された場合、または入力欄がまだ空の場合に同期
                     if (currentLastKill !== prevLastKill || !nextInputs[bossName]) {
                         nextInputs[bossName] = formatToHHMM(currentLastKill);
                         changed = true;
                     }
                 });
 
-                if (changed) {
-                    setInputStates(nextInputs);
-                }
+                if (changed) setInputStates(nextInputs);
                 prevHistoryRef.current = history;
             }, [history]);
 
             const handleSave = async (name) => {
                 const ts = parseTimeInputToTimestamp(inputStates[name]);
                 if (!ts) return;
-
-                // 即座にローカルに反映
                 const newData = { ...history, [name]: { lastKill: ts } };
                 setHistory(newData);
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
-
-                // クラウドに保存
                 try {
                     await db.collection(`artifacts/${appId}/public/data/boss_status`).doc(name).set({ lastKill: ts }, { merge: true });
-                } catch (e) { console.error("Cloud save failed", e); }
+                } catch (e) { console.error("Cloud save error", e); }
             };
 
             const setInputToNow = (name) => {
                 const d = new Date();
-                const hh = String(d.getHours()).padStart(2, '0');
-                const mm = String(d.getMinutes()).padStart(2, '0');
-                const timeStr = `${hh}:${mm}`;
+                const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                 setInputStates(prev => ({ ...prev, [name]: timeStr }));
             };
 
@@ -271,7 +257,7 @@
                         let last = history[boss.name]?.lastKill || 0;
                         const intervalMs = boss.value * 3600 * 1000;
                         if (last !== 0) {
-                            while (last + intervalMs < now) { last += intervalMs; }
+                            while (last + intervalMs < now) last += intervalMs;
                             nextSpawn = last + intervalMs;
                         }
                     } else if (boss.type === 'weekly') {
@@ -284,8 +270,12 @@
             }, [history, now]);
 
             const top10Soon = useMemo(() => {
-                return processedBosses.filter(b => b.nextSpawn !== 0).sort((a, b) => a.nextSpawn - b.nextSpawn).slice(0, 10);
-            }, [processedBosses]);
+                return processedBosses
+                    .filter(b => b.nextSpawn !== 0)
+                    .filter(b => topLvFilter === 'ALL' || (b.lv >= 60 && b.lv <= 100)) // フィルター適用
+                    .sort((a, b) => a.nextSpawn - b.nextSpawn)
+                    .slice(0, 10);
+            }, [processedBosses, topLvFilter]);
 
             const displayBosses = useMemo(() => {
                 return processedBosses
@@ -297,12 +287,13 @@
                 <div className="min-h-screen p-2 md:p-6 pb-20">
                     <div className="max-w-6xl mx-auto">
                         
+                        {/* Header */}
                         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4 sticky top-0 bg-slate-950/95 py-2 z-30 shadow-md">
                             <div className="flex items-center gap-3">
                                 <h1 className="text-xl font-bold text-red-500 flex items-center gap-2">
                                     <IconClock /> LORD NINE ボス出現時間
                                 </h1>
-                                <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500 animate-pulse'}`} title={isOnline ? "同期中" : "オフライン"}></div>
+                                <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500 animate-pulse'}`}></div>
                             </div>
                             <div className="flex items-center gap-2 w-full md:w-auto">
                                 <div className="relative flex-grow md:w-64">
@@ -326,12 +317,30 @@
                             </div>
                         </div>
 
+                        {/* Top 10 Priority Section */}
                         <div className="mb-8">
-                            <div className="flex items-center gap-2 mb-3 px-1 text-orange-500">
-                                <IconFlame />
-                                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">直近 10体</h2>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 px-1">
+                                <div className="flex items-center gap-2">
+                                    <IconFlame />
+                                    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">直近 10 体</h2>
+                                </div>
+                                {/* フィルターボタン追加 */}
+                                <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 self-start">
+                                    <button 
+                                        onClick={() => setTopLvFilter('ALL')}
+                                        className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${topLvFilter === 'ALL' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                                    >
+                                        ALL
+                                    </button>
+                                    <button 
+                                        onClick={() => setTopLvFilter('60-100')}
+                                        className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${topLvFilter === '60-100' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                                    >
+                                        Lv.60～100
+                                    </button>
+                                </div>
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 md:gap-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                                 {top10Soon.map((boss, index) => {
                                     const diff = boss.nextSpawn - now;
                                     const active = diff <= 0;
@@ -341,15 +350,19 @@
                                                 {index + 1}
                                             </div>
                                             <div className="flex justify-between items-center mb-1">
-                                                <span className="text-[10px] text-slate-300 font-mono font-bold bg-slate-950/40 px-1 rounded">{formatPredictedTime(boss.nextSpawn)}</span>
+                                                {/* 上部: カウントダウン (以前の予想時間スタイル) */}
+                                                <span className="text-[10px] text-slate-300 font-mono font-bold bg-slate-950/40 px-1 rounded">
+                                                    {formatCountdown(diff, true)}
+                                                </span>
                                                 <span className={`text-[10px] px-1 rounded font-mono font-bold ${boss.color === 'purple' ? 'bg-purple-500/20 text-purple-300' : 'bg-red-500/20 text-red-300'}`}>
                                                     Lv.{boss.lv}
                                                 </span>
                                             </div>
                                             <div className="font-bold text-sm md:text-base truncate text-white leading-tight mb-1">{boss.name}</div>
-                                            <div className="text-xs md:text-sm font-mono font-bold text-slate-100 flex items-center gap-1.5 mt-1 border-t border-white/5 pt-1">
+                                            {/* 下部: 予想時間 (以前のカウントダウンスタイル/フォント拡大) */}
+                                            <div className="text-sm md:text-base font-mono font-bold text-slate-100 flex items-center gap-1.5 mt-1 border-t border-white/5 pt-1">
                                                 <IconClock color={active ? "#ef4444" : "#94a3b8"} size={14} />
-                                                {formatCountdown(diff)}
+                                                {formatPredictedTime(boss.nextSpawn)}
                                             </div>
                                         </div>
                                     );
@@ -357,23 +370,22 @@
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto bg-slate-900 rounded-xl border border-slate-800 shadow-2xl">
-                            <table className="w-full text-left border-collapse min-w-[800px]">
+                        {/* Full Table Layout */}
+                        <div className="overflow-x-auto bg-slate-900 rounded-xl border border-slate-800 shadow-2xl overflow-hidden">
+                            <table className="w-full text-left border-collapse min-w-[700px]">
                                 <thead className="bg-slate-950/50 border-b border-slate-800 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
                                     <tr>
                                         <th className="p-4 w-12 text-center">No.</th>
                                         <th className="p-4">Lv / 名前</th>
-                                        <th className="p-4">出現場所</th>
-                                        <th className="p-4 text-center">討伐時間入力 (4桁入力可)</th>
+                                        <th className="p-4 text-center min-w-[280px]">討伐時間入力</th>
                                         <th className="p-4 text-center">予想時間</th>
-                                        <th className="p-4 text-right">カウントダウン</th>
+                                        <th className="p-4 text-right">出現場所</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {displayBosses.map((boss, index) => {
                                         const diff = boss.nextSpawn - now;
                                         const active = boss.nextSpawn !== 0 && diff <= 0;
-                                        const unknown = boss.type === 'interval' && boss.nextSpawn === 0;
 
                                         return (
                                             <tr key={boss.name} className={`border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors ${active ? 'bg-red-950/20' : ''}`}>
@@ -388,18 +400,13 @@
                                                         <span className={`font-bold text-sm whitespace-nowrap ${active ? 'text-red-400' : ''}`}>{boss.name}</span>
                                                     </div>
                                                 </td>
-                                                <td className="p-4 text-xs text-slate-500">
-                                                    <div className="flex items-center gap-1 whitespace-nowrap">
-                                                        <IconMap /> {boss.area}
-                                                    </div>
-                                                </td>
                                                 <td className="p-4">
-                                                    <div className="flex items-center justify-center gap-2">
+                                                    <div className="flex items-center justify-center gap-2 flex-nowrap">
                                                         {boss.type === 'interval' ? (
-                                                            <div className="flex items-center gap-1">
+                                                            <div className="flex items-center gap-1.5 flex-nowrap">
                                                                 <button 
                                                                     onClick={() => setInputToNow(boss.name)}
-                                                                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-2 rounded-lg transition-all btn-active font-bold flex items-center gap-1 border border-slate-700"
+                                                                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-2 py-2 rounded-lg transition-all btn-active font-bold flex items-center gap-1 border border-slate-700 whitespace-nowrap"
                                                                 >
                                                                     <IconSword /> 討伐
                                                                 </button>
@@ -407,7 +414,7 @@
                                                                     type="text" 
                                                                     inputmode="numeric"
                                                                     placeholder="0000"
-                                                                    className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs w-20 text-slate-100 text-center font-mono cursor-pointer"
+                                                                    className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs w-16 text-slate-100 text-center font-mono cursor-pointer shrink-0"
                                                                     value={inputStates[boss.name] || ""}
                                                                     onFocus={(e) => e.target.select()}
                                                                     onClick={(e) => e.target.select()}
@@ -419,7 +426,7 @@
                                                                 />
                                                                 <button 
                                                                     onClick={() => handleSave(boss.name)}
-                                                                    className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-4 py-2 rounded-lg transition-all btn-active font-bold shadow-md"
+                                                                    className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-2 rounded-lg transition-all btn-active font-bold shadow-md whitespace-nowrap"
                                                                 >
                                                                     保存
                                                                 </button>
@@ -430,12 +437,14 @@
                                                     </div>
                                                 </td>
                                                 <td className="p-4 text-center">
-                                                    <span className={`text-xs font-mono font-bold ${active ? 'text-red-400' : 'text-slate-400'}`}>
+                                                    <span className={`text-sm md:text-base font-mono font-bold whitespace-nowrap ${active ? 'text-red-400' : 'text-slate-200'}`}>
                                                         {formatPredictedTime(boss.nextSpawn)}
                                                     </span>
                                                 </td>
-                                                <td className="p-4 font-mono text-sm text-right font-bold">
-                                                    {unknown ? <span className="text-slate-700 italic text-xs">---</span> : formatCountdown(diff)}
+                                                <td className="p-4 text-xs text-slate-400 text-right">
+                                                    <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                                                        <IconMap /> {boss.area}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -445,8 +454,8 @@
                         </div>
 
                         <div className="mt-6 text-[10px] text-slate-600 flex flex-col md:flex-row justify-between gap-2 opacity-50 px-1 border-t border-slate-800 pt-4">
-                            <p>※ スマホは数字4桁を打つだけで自動認識されます。全端末でリアルタイム同期中です。</p>
-                            <p className="font-mono text-right uppercase">Lord Nine Boss Tracker v2.3.3</p>
+                            <p>※ Top10 のフィルターと表示順序を更新しました。リアルタイム同期中です。</p>
+                            <p className="font-mono text-right uppercase italic">Lord Nine Boss Tracker v2.4.1</p>
                         </div>
                     </div>
                 </div>
