@@ -208,8 +208,13 @@
 
             const handleSave = async () => {
                 if (!editingBoss) return;
-                const ts = parseTimeInputToTimestamp(editingBoss.tempTime);
-                if (!ts) return;
+                
+                let ts = 0;
+                // 入力が空白でない場合のみパースを行う
+                if (editingBoss.tempTime && editingBoss.tempTime.trim() !== "") {
+                    ts = parseTimeInputToTimestamp(editingBoss.tempTime);
+                    if (!ts) return; // 不正な形式の場合は何もしない
+                }
 
                 const bossName = editingBoss.name;
                 setHistory(prev => ({ ...prev, [bossName]: { lastKill: ts } }));
@@ -228,7 +233,6 @@
                 setEditingBoss(prev => ({ ...prev, tempTime: `${hh}:${mm}` }));
             };
 
-            // 周期計算ロジック： historyから取得したlastKillを基準に、予定時刻経過なら表示上の記録もサイクルさせる
             const processedBosses = useMemo(() => {
                 return BOSS_DATA_RAW.map(boss => {
                     let nextSpawn = 0;
@@ -409,8 +413,8 @@
                         </div>
 
                         <div className="text-[10px] text-slate-600 flex justify-between opacity-50 px-1 border-t border-slate-800 pt-4 mb-4">
-                            <p>※ 周期と場所を再表示しました。討伐記録は予定経過で自動サイクルします。</p>
-                            <p className="font-mono italic uppercase text-right">L9 Tracker v2.5.8</p>
+                            <p>※ 記録を空白にして「保存」するとリセットされます。全端末でリアルタイム同期中です。</p>
+                            <p className="font-mono italic uppercase text-right">L9 Tracker v2.5.9</p>
                         </div>
                     </div>
 
@@ -426,12 +430,13 @@
                                 </div>
                                 <div className="p-6">
                                     <div className="mb-6 text-center">
-                                        <label className="block text-[10px] text-slate-500 mb-2 uppercase font-bold tracking-widest">討伐時間 (4桁入力)</label>
+                                        <label className="block text-[10px] text-slate-500 mb-2 uppercase font-bold tracking-widest">討伐時間 (空で保存＝リセット)</label>
                                         <input 
                                             type="text" 
                                             inputmode="numeric"
                                             className="bg-slate-950 border-2 border-slate-700 focus:border-red-500 rounded-xl text-3xl font-mono text-center w-full py-4 text-slate-100 outline-none transition-all shadow-inner"
                                             value={editingBoss.tempTime}
+                                            placeholder="-----"
                                             onChange={(e) => setEditingBoss(prev => ({ ...prev, tempTime: e.target.value }))}
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter') {
