@@ -3,26 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="L9ボス時間">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/ef4444/ffffff?text=L9">
     <title>LORD NINE ボス出現時間</title>
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- React & Build Tools -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
         body { background-color: #020617; color: #e2e8f0; font-family: sans-serif; overflow-x: hidden; touch-action: manipulation; }
         .font-mono { font-family: 'JetBrains+Mono', monospace; }
-        .btn-active:active { transform: scale(0.95); }
-        /* テーブルのスクロールバー */
-        .overflow-x-auto::-webkit-scrollbar { height: 4px; }
-        .overflow-x-auto::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
-        /* モーダルのアニメーション */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         .modal-enter { animation: fadeIn 0.15s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -31,7 +29,6 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyD8mUBp3fEmOCk0JdmpQaQjEBpor3UFnEk",
             authDomain: "lord-nine-timer.firebaseapp.com",
@@ -43,69 +40,66 @@
         const appId = "lord-nine-boss-timer";
         const STORAGE_KEY = "L9_BOSS_TIMER_DATA";
 
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
 
         const { useState, useEffect, useMemo, useRef } = React;
         const DAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
-        // --- アイコン ---
-        const IconClock = ({color="currentColor", size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
-        const IconSword = ({size=14, color="#ef4444"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l1-1"/></svg>;
-        const IconFlame = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>;
-        const IconMap = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
+        const IconClock = ({size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+        const IconSword = ({size=14}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l1-1"/></svg>;
+        const IconBell = ({active}) => <svg width="20" height="20" viewBox="0 0 24 24" fill={active ? "#ef4444" : "none"} stroke={active ? "#ef4444" : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
+        const IconMap = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
 
         const BOSS_DATA_RAW = [
-            { lv: 60, name: "ベナトゥス", type: "interval", value: 10, area: "汚染された川筋", color: "red" },
-            { lv: 65, name: "ビオレント", type: "interval", value: 10, area: "エラ小川", color: "red" },
-            { lv: 70, name: "エゴ", type: "interval", value: 21, area: "奪還集結地", color: "red" },
-            { lv: 70, name: "クレメンティス", type: "weekly", schedule: [{ day: 1, time: "12:30" }, { day: 4, time: "20:00" }], area: "白の魔女のゆりかご", color: "red" },
-            { lv: 75, name: "リベラ", type: "interval", value: 24, area: "高い風の半島", color: "red" },
-            { lv: 75, name: "アラネオ", type: "interval", value: 24, area: "墓地地下 1 階", color: "red" },
-            { lv: 80, name: "アンドゥミエル", type: "interval", value: 24, area: "実験体研究室", color: "red" },
-            { lv: 80, name: "サピルス", type: "weekly", schedule: [{ day: 0, time: "18:00" }, { day: 2, time: "12:30" }], area: "月光の束縛", color: "red" },
-            { lv: 80, name: "ネウトロ", type: "weekly", schedule: [{ day: 2, time: "20:00" }, { day: 4, time: "12:30" }], area: "愛情の決戦", color: "red" },
-            { lv: 85, name: "レディ・ダリア", type: "interval", value: 18, area: "血染めの陰", color: "red" },
-            { lv: 85, name: "将軍アクレウス", type: "interval", value: 29, area: "墓地地下 2 階", color: "red" },
-            { lv: 85, name: "テュメレ", type: "weekly", schedule: [{ day: 1, time: "20:00" }, { day: 3, time: "12:30" }], area: "暴走の痕跡", color: "red" },
-            { lv: 88, name: "アメンティス", type: "interval", value: 29, area: "石灰岩の岬", color: "red" },
-            { lv: 88, name: "ブラウドモア", type: "interval", value: 32, area: "蔓薔薇の橋", color: "red" },
-            { lv: 90, name: "ミラベ", type: "weekly", schedule: [{ day: 6, time: "16:00" }], area: "墓地地下 3 階", color: "red" },
-            { lv: 93, name: "ワニタス", type: "interval", value: 48, area: "罠の沼地", color: "red" },
-            { lv: 93, name: "メトゥス", type: "interval", value: 48, area: "追従者の野原", color: "red" },
-            { lv: 93, name: "デュプリカン", type: "interval", value: 48, area: "操り人形の玉座", color: "red" },
-            { lv: 95, name: "シュライヤー", type: "interval", value: 35, area: "猟犬の仮面劇", color: "red" },
-            { lv: 95, name: "リンゴル", type: "weekly", schedule: [{ day: 6, time: "18:00" }], area: "松明街道", color: "red" },
-            { lv: 95, name: "ロデリック", type: "weekly", schedule: [{ day: 5, time: "20:00" }], area: "ガルバナ地下水路 1 階", color: "red" },
-            { lv: 98, name: "ガレス", type: "interval", value: 32, area: "死者の大地第 1 区域", color: "red" },
-            { lv: 98, name: "ティトル", type: "interval", value: 37, area: "死者の大地第 2 区域", color: "red" },
-            { lv: 98, name: "ラルバ", type: "interval", value: 35, area: "ガルバナ干拓地", color: "red" },
-            { lv: 100, name: "カテナ", type: "interval", value: 35, area: "死者の大地第 3 区域", color: "red" },
-            { lv: 100, name: "アウラーク", type: "weekly", schedule: [{ day: 5, time: "23:00" }, { day: 3, time: "22:00" }], area: "ガルバナ地下水路 2 階", color: "red" },
-            { lv: 100, name: "セクレタ", type: "interval", value: 62, area: "カリオンの墓", color: "red" },
-            { lv: 100, name: "オルド", type: "interval", value: 62, area: "後継者の楽園", color: "red" },
-            { lv: 100, name: "アスタ", type: "interval", value: 62, area: "黄金血の平原", color: "red" },
-            { lv: 100, name: "スポル", type: "interval", value: 62, area: "黄金血の平原", color: "red" },
-            { lv: 120, name: "シャイフロック", type: "weekly", schedule: [{ day: 6, time: "23:00" }], area: "カリオンの墓", color: "red" },
-            { lv: 120, name: "ベンジー", type: "weekly", schedule: [{ day: 0, time: "22:00" }], area: "復讐の巣", color: "red" },
-            { lv: 130, name: "リビティーナ", type: "weekly", schedule: [{ day: 1, time: "22:00" }, { day: 6, time: "22:00" }], area: "従属の礼拝堂", color: "red" },
-            { lv: 130, name: "ラカゼス", type: "weekly", schedule: [{ day: 2, time: "23:00" }, { day: 0, time: "20:00" }], area: "セクレタの刑罰", color: "red" },
-            { lv: 135, name: "イカルシア", type: "weekly", schedule: [{ day: 2, time: "22:00" }, { day: 5, time: "22:00" }], area: "王家の谷", color: "red" },
-            { lv: 135, name: "モティ", type: "weekly", schedule: [{ day: 3, time: "20:00" }, { day: 6, time: "20:00" }], area: "エブリンの外庭", color: "red" },
-            { lv: 140, name: "ネバ", type: "weekly", schedule: [{ day: 0, time: "23:00" }], area: "セリンの中庭", color: "red" },
-            { lv: 140, name: "トゥミエル", type: "weekly", schedule: [{ day: 0, time: "20:00" }], area: "ガルバナ地下水路 3 階", color: "red" },
-            { lv: 60, name: "ラタン", type: "daily", times: ["12:00", "21:00"], area: "特殊出現", color: "purple" },
-            { lv: 85, name: "パルト", type: "daily", times: ["12:00", "21:00"], area: "特殊出現", color: "purple" },
-            { lv: 105, name: "ネドラ", type: "daily", times: ["12:00", "21:00"], area: "特殊出現", color: "purple" }
+            { lv: 60, name: "ベナトゥス", type: "interval", value: 10, area: "汚染された川筋" },
+            { lv: 65, name: "ビオレント", type: "interval", value: 10, area: "エラ小川" },
+            { lv: 70, name: "エゴ", type: "interval", value: 21, area: "奪還集結地" },
+            { lv: 70, name: "クレメンティス", type: "weekly", schedule: [{ day: 1, time: "12:30" }, { day: 4, time: "20:00" }], area: "白の魔女のゆりかご" },
+            { lv: 75, name: "リベラ", type: "interval", value: 24, area: "黒い嵐の半島" },
+            { lv: 75, name: "アラネオ", type: "interval", value: 24, area: "ティリロサの墓地地下1階" },
+            { lv: 80, name: "アンドゥミエル", type: "interval", value: 24, area: "実験体研究室" },
+            { lv: 80, name: "サピルス", type: "weekly", schedule: [{ day: 0, time: "18:00" }, { day: 2, time: "12:30" }], area: "月光の束縛" },
+            { lv: 80, name: "ネウトロ", type: "weekly", schedule: [{ day: 2, time: "20:00" }, { day: 4, time: "12:30" }], area: "愛情の決戦" },
+            { lv: 85, name: "レディ・ダリア", type: "interval", value: 18, area: "血染めの陰" },
+            { lv: 85, name: "将軍アクレウス", type: "interval", value: 29, area: "ティリロサの墓地地下2階" },
+            { lv: 85, name: "テュメレ", type: "weekly", schedule: [{ day: 1, time: "20:00" }, { day: 3, time: "12:30" }], area: "暴走の痕跡" },
+            { lv: 88, name: "アメンティス", type: "interval", value: 29, area: "石灰岩の岬" },
+            { lv: 88, name: "ブラウドモア", type: "interval", value: 32, area: "蔓薔薇の橋" },
+            { lv: 90, name: "ミラベ", type: "weekly", schedule: [{ day: 6, time: "16:00" }], area: "ティリロサの墓地地下3階" },
+            { lv: 93, name: "ワニタス", type: "interval", value: 48, area: "罠の沼地" },
+            { lv: 93, name: "メトゥス", type: "interval", value: 48, area: "追従者の野原" },
+            { lv: 93, name: "デュプリカン", type: "interval", value: 48, area: "操り人形の玉座" },
+            { lv: 95, name: "シュライヤー", type: "interval", value: 35, area: "猟犬の仮面劇" },
+            { lv: 95, name: "リンゴル", type: "weekly", schedule: [{ day: 6, time: "18:00" }], area: "松明街道" },
+            { lv: 95, name: "ロデリック", type: "weekly", schedule: [{ day: 5, time: "20:00" }], area: "ガルバナ地下水路1階" },
+            { lv: 98, name: "ガレス", type: "interval", value: 32, area: "死者の大地第1区域" },
+            { lv: 98, name: "ティトル", type: "interval", value: 37, area: "死者の大地第2区域" },
+            { lv: 98, name: "ラルバ", type: "interval", value: 35, area: "ガルバナ干拓地" },
+            { lv: 100, name: "カテナ", type: "interval", value: 35, area: "死者の大地第3区域" },
+            { lv: 100, name: "アウラーク", type: "weekly", schedule: [{ day: 5, time: "23:00" }, { day: 3, time: "22:00" }], area: "ガルバナ地下水路2階" },
+            { lv: 100, name: "セクレタ", type: "interval", value: 62, area: "カリオンの墓" },
+            { lv: 100, name: "オルド", type: "interval", value: 62, area: "後継者の楽園" },
+            { lv: 100, name: "アスタ", type: "interval", value: 62, area: "黄金血の平原" },
+            { lv: 100, name: "スポル", type: "interval", value: 62, area: "黄金血の平原" },
+            { lv: 120, name: "シャイフロック", type: "weekly", schedule: [{ day: 6, time: "23:00" }], area: "カリオンの墓" },
+            { lv: 120, name: "ベンジー", type: "weekly", schedule: [{ day: 0, time: "22:00" }], area: "復讐の巣" },
+            { lv: 130, name: "リビティーナ", type: "weekly", schedule: [{ day: 1, time: "22:00" }, { day: 6, time: "22:00" }], area: "永遠なる従属の礼拝堂" },
+            { lv: 130, name: "ラカゼス", type: "weekly", schedule: [{ day: 2, time: "23:00" }, { day: 0, time: "20:00" }], area: "セクレタの刑罰" },
+            { lv: 135, name: "イカルシア", type: "weekly", schedule: [{ day: 2, time: "22:00" }, { day: 5, time: "22:00" }], area: "王家の谷" },
+            { lv: 135, name: "モティ", type: "weekly", schedule: [{ day: 3, time: "20:00" }, { day: 6, time: "20:00" }], area: "エブリンの外庭" },
+            { lv: 140, name: "ネバ", type: "weekly", schedule: [{ day: 0, time: "23:00" }], area: "セリンの中庭" },
+            { lv: 140, name: "トゥミエル", type: "weekly", schedule: [{ day: 0, time: "20:00" }], area: "ガルバナ地下水路3階" },
+            { lv: 60, name: "ラタン", type: "daily", times: ["12:00", "21:00"], area: "特殊出現" },
+            { lv: 85, name: "パルト", type: "daily", times: ["12:00", "21:00"], area: "特殊出現" },
+            { lv: 105, name: "ネドラ", type: "daily", times: ["12:00", "21:00"], area: "特殊出現" }
         ].map((b, i) => ({ ...b, originalIndex: i }));
 
         const formatToHHMM = (ts) => {
             if (!ts) return "";
             const d = new Date(ts);
-            return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+            return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
         };
 
         const getNextWeeklyTime = (schedule) => {
@@ -134,13 +128,12 @@
             return Math.min(...options);
         };
 
-        const formatCountdown = (ms, short = false) => {
-            if (ms <= 0) return <span className="text-red-500 font-bold animate-pulse text-xs md:text-sm">出現中</span>;
+        const formatCountdown = (ms) => {
+            if (ms <= 0) return <span className="text-red-500 font-bold animate-pulse">出現中</span>;
             const totalSec = Math.floor(ms / 1000);
             const h = Math.floor(totalSec / 3600);
             const m = Math.floor((totalSec % 3600) / 60);
             const s = totalSec % 60;
-            if (short) return `${h}h ${m}m`;
             return `${h}h ${m}m ${s}s`;
         };
 
@@ -148,26 +141,9 @@
             if (!ts) return "---";
             const d = new Date(ts);
             const now = new Date();
-            const isDifferentDay = d.getDate() !== now.getDate() || d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear();
-            const hh = String(d.getHours()).padStart(2, '0');
-            const mm = String(d.getMinutes()).padStart(2, '0');
-            const timeStr = `${hh}:${mm}`;
+            const isDifferentDay = d.getDate() !== now.getDate();
+            const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
             return isDifferentDay ? `${DAYS[d.getDay()]} ${timeStr}` : timeStr;
-        };
-
-        const parseTimeInputToTimestamp = (timeStr) => {
-            if (!timeStr) return null;
-            let clean = timeStr.replace(/\D/g, '');
-            if (clean.length === 3) clean = '0' + clean;
-            if (clean.length < 4) return null;
-            const h = parseInt(clean.substring(0, 2));
-            const m = parseInt(clean.substring(2, 4));
-            if (h >= 24 || m >= 60) return null;
-            const now = new Date();
-            const d = new Date();
-            d.setHours(h, m, 0, 0);
-            if (d.getTime() > now.getTime()) d.setDate(d.getDate() - 1);
-            return d.getTime();
         };
 
         function App() {
@@ -175,322 +151,200 @@
                 const saved = localStorage.getItem(STORAGE_KEY);
                 return saved ? JSON.parse(saved) : {};
             });
-            const [searchTerm, setSearchTerm] = useState('');
-            const [sortByTime, setSortByTime] = useState(false);
-            const [topLvFilter, setTopLvFilter] = useState('ALL');
             const [now, setNow] = useState(Date.now());
-            const [isOnline, setIsOnline] = useState(false);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [topLvFilter, setTopLvFilter] = useState('ALL');
+            const [editingBoss, setEditingBoss] = useState(null);
+            const [notifiedEvents, setNotifiedEvents] = useState(new Set());
+            const [isNotifyEnabled, setIsNotifyEnabled] = useState(Notification.permission === 'granted');
 
-            // モーダル管理
-            const [editingBoss, setEditingBoss] = useState(null); 
-            
             useEffect(() => {
-                const initFirebase = async () => {
-                    try {
-                        await auth.signInAnonymously();
-                        setIsOnline(true);
-                        const path = `artifacts/${appId}/public/data/boss_status`;
-                        return db.collection(path).onSnapshot(snapshot => {
-                            const data = {};
-                            snapshot.forEach(doc => { data[doc.id] = doc.data(); });
-                            setHistory(prev => {
-                                const newHistory = { ...prev, ...data };
-                                localStorage.setItem(STORAGE_KEY, JSON.stringify(newHistory));
-                                return newHistory;
-                            });
-                        }, () => setIsOnline(false));
-                    } catch (e) { setIsOnline(false); }
-                };
-                const unsubPromise = initFirebase();
-                const interval = setInterval(() => setNow(Date.now()), 1000);
-                return () => { unsubPromise.then(u => u && u()); clearInterval(interval); };
+                auth.signInAnonymously().catch(() => {});
+                const path = `artifacts/${appId}/public/data/boss_status`;
+                const unsub = db.collection(path).onSnapshot(snapshot => {
+                    const data = {};
+                    snapshot.forEach(doc => { data[doc.id] = doc.data(); });
+                    setHistory(prev => {
+                        const next = { ...prev, ...data };
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+                        return next;
+                    });
+                });
+                const timer = setInterval(() => setNow(Date.now()), 1000);
+                return () => { unsub(); clearInterval(timer); };
             }, []);
 
-            const handleSave = async () => {
-                if (!editingBoss) return;
-                
-                let ts = 0;
-                if (editingBoss.tempTime && editingBoss.tempTime.trim() !== "") {
-                    ts = parseTimeInputToTimestamp(editingBoss.tempTime);
-                    if (!ts) return; 
-                }
-
-                const bossName = editingBoss.name;
-                setHistory(prev => ({ ...prev, [bossName]: { lastKill: ts } }));
-
-                try {
-                    await db.collection(`artifacts/${appId}/public/data/boss_status`).doc(bossName).set({ lastKill: ts }, { merge: true });
-                } catch (e) { console.error(e); }
-                
-                setEditingBoss(null);
+            const requestNotify = () => {
+                Notification.requestPermission().then(permission => {
+                    setIsNotifyEnabled(permission === 'granted');
+                });
             };
 
-            const setModalTimeToNow = () => {
-                const d = new Date();
-                const hh = String(d.getHours()).padStart(2, '0');
-                const mm = String(d.getMinutes()).padStart(2, '0');
-                setEditingBoss(prev => ({ ...prev, tempTime: `${hh}:${mm}` }));
+            const sendNotification = (title, body) => {
+                if (Notification.permission === 'granted') {
+                    new Notification(title, { body, icon: 'https://placehold.co/128x128/ef4444/ffffff?text=L9' });
+                }
             };
 
             const processedBosses = useMemo(() => {
                 return BOSS_DATA_RAW.map(boss => {
                     let nextSpawn = 0;
                     let displayLastKill = history[boss.name]?.lastKill || 0;
-
                     if (boss.type === 'interval') {
                         const intervalMs = boss.value * 3600 * 1000;
                         if (displayLastKill !== 0) {
-                            while (displayLastKill + intervalMs < now) {
-                                displayLastKill += intervalMs;
-                            }
+                            while (displayLastKill + intervalMs < now) displayLastKill += intervalMs;
                             nextSpawn = displayLastKill + intervalMs;
                         }
-                    } else if (boss.type === 'weekly') {
-                        nextSpawn = getNextWeeklyTime(boss.schedule);
-                    } else if (boss.type === 'daily') {
-                        nextSpawn = getNextDailyTime(boss.times);
-                    }
+                    } else if (boss.type === 'weekly') nextSpawn = getNextWeeklyTime(boss.schedule);
+                    else if (boss.type === 'daily') nextSpawn = getNextDailyTime(boss.times);
                     return { ...boss, nextSpawn, displayLastKill };
                 });
             }, [history, now]);
 
-            // 直近10体のイベントリスト作成 (次回と次々回を含める)
-            const top10SoonEvents = useMemo(() => {
+            const top10 = useMemo(() => {
                 const events = [];
                 processedBosses.forEach(boss => {
                     if (boss.nextSpawn === 0) return;
-                    
-                    // フィルター条件
-                    if (!(topLvFilter === 'ALL' || (boss.lv >= 60 && boss.lv <= 100) || boss.name === 'ネドラ')) return;
-
-                    // 1つ目の出現予定 (次回)
+                    if (topLvFilter === '60-100' && boss.lv > 100 && boss.name !== 'ネドラ') return;
                     events.push({ ...boss, eventTime: boss.nextSpawn, label: "次" });
-
-                    // 2つ目の出現予定 (次々回) - インターバル形式のみ対応
                     if (boss.type === 'interval') {
-                        const intervalMs = boss.value * 3600 * 1000;
-                        events.push({ ...boss, eventTime: boss.nextSpawn + intervalMs, label: "次々" });
+                        events.push({ ...boss, eventTime: boss.nextSpawn + (boss.value * 3600 * 1000), label: "次々" });
                     }
-                    // 固定時間の場合は、本来は次のスケジュールを探すべきだが簡略化
                 });
-
-                return events
-                    .sort((a, b) => a.eventTime - b.eventTime)
-                    .slice(0, 10);
+                return events.sort((a, b) => a.eventTime - b.eventTime).slice(0, 10);
             }, [processedBosses, topLvFilter]);
 
-            const displayBosses = useMemo(() => {
-                return processedBosses
-                    .filter(b => b.name.includes(searchTerm) || b.area.includes(searchTerm))
-                    .sort((a, b) => sortByTime ? (a.nextSpawn - b.nextSpawn) : (a.originalIndex - b.originalIndex));
-            }, [processedBosses, searchTerm, sortByTime]);
+            useEffect(() => {
+                top10.forEach(event => {
+                    const diffMin = (event.eventTime - now) / 60000;
+                    const key5m = `${event.name}-${event.eventTime}-5m`;
+                    const keyNow = `${event.name}-${event.eventTime}-now`;
+
+                    if (diffMin <= 5 && diffMin > 4.8 && !notifiedEvents.has(key5m)) {
+                        sendNotification("ボス出現5分前", `${event.name} がまもなく出現します (${event.area})`);
+                        setNotifiedEvents(prev => new Set(prev).add(key5m));
+                    }
+                    if (diffMin <= 0 && diffMin > -0.2 && !notifiedEvents.has(keyNow)) {
+                        sendNotification("ボス出現", `${event.name} が出現しました！`);
+                        setNotifiedEvents(prev => new Set(prev).add(keyNow));
+                    }
+                });
+            }, [top10, now]);
+
+            const handleSave = async () => {
+                if (!editingBoss) return;
+                let ts = 0;
+                if (editingBoss.tempTime) {
+                    const [h, m] = editingBoss.tempTime.replace(/\D/g,'').match(/.{2}/g).map(Number);
+                    const d = new Date(); d.setHours(h, m, 0, 0);
+                    if (d > now) d.setDate(d.getDate() - 1);
+                    ts = d.getTime();
+                }
+                const path = `artifacts/${appId}/public/data/boss_status`;
+                await db.collection(path).doc(editingBoss.name).set({ lastKill: ts }, { merge: true });
+                setEditingBoss(null);
+            };
 
             return (
-                <div className="min-h-screen p-2 md:p-6 pb-20 relative">
+                <div className="min-h-screen p-2 md:p-6 pb-20">
                     <div className="max-w-6xl mx-auto">
-                        
-                        {/* Header */}
-                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4 sticky top-0 bg-slate-950/95 py-2 z-30 shadow-md">
-                            <div className="flex items-center gap-3">
-                                <h1 className="text-xl font-bold text-red-500 flex items-center gap-2">
-                                    <IconClock size={24} /> LORD NINE
-                                </h1>
-                                <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500 animate-pulse'}`}></div>
-                            </div>
-                            <div className="flex items-center gap-2 w-full md:w-auto">
-                                <input 
-                                    type="text" placeholder="名前や場所で検索..." 
-                                    className="bg-slate-900 border border-slate-800 rounded-lg py-2 px-4 w-full text-sm focus:outline-none focus:ring-1 focus:ring-red-500"
-                                    value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                                />
-                                <button 
-                                    onClick={() => setSortByTime(!sortByTime)}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold border transition-all whitespace-nowrap ${sortByTime ? 'bg-red-600 border-red-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-400'}`}
-                                >
-                                    {sortByTime ? "出現順" : "リスト順"}
+                        <div className="flex justify-between items-center mb-6 sticky top-0 bg-slate-950/90 py-2 z-40">
+                            <div className="flex items-center gap-4">
+                                <h1 className="text-xl font-bold text-red-500">LORD NINE</h1>
+                                <button onClick={requestNotify} className="p-2 bg-slate-900 rounded-full border border-slate-700">
+                                    <IconBell active={isNotifyEnabled} />
                                 </button>
                             </div>
+                            <div className="text-2xl font-mono font-bold text-slate-100">{formatToHHMM(now)}</div>
                         </div>
 
-                        {/* Top 10 Priority Section */}
+                        {/* Top 10 Row */}
                         <div className="mb-8">
-                            <div className="flex items-center justify-between mb-3 px-1">
-                                <div className="flex items-center gap-2 text-slate-400">
-                                    <IconFlame />
-                                    <h2 className="text-xs font-bold uppercase tracking-widest">直近 10 体 (次々回含む)</h2>
-                                </div>
-                                <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+                            <div className="flex justify-between items-center mb-3">
+                                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">直近 10 体</h2>
+                                <div className="flex bg-slate-900 p-1 rounded-lg">
                                     {['ALL', '60-100'].map(f => (
-                                        <button key={f} onClick={() => setTopLvFilter(f)} className={`px-2 py-1 rounded text-[10px] font-bold ${topLvFilter === f ? 'bg-red-600 text-white' : 'text-slate-500'}`}>{f}</button>
+                                        <button key={f} onClick={() => setTopLvFilter(f)} className={`px-3 py-1 rounded text-[10px] font-bold ${topLvFilter === f ? 'bg-red-600 text-white' : 'text-slate-500'}`}>{f}</button>
                                     ))}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 md:gap-3">
-                                {top10SoonEvents.map((event, index) => {
-                                    const diff = event.eventTime - now;
-                                    const active = diff <= 0;
-                                    // 記録の表示用時間はイベントそのものではなく現在計算されている boss の lastKill を基準にする
-                                    const lastKillTimeDisplay = formatToHHMM(event.displayLastKill);
-
-                                    return (
-                                        <div 
-                                            key={`top-${event.name}-${event.eventTime}`} 
-                                            onClick={() => event.type === 'interval' && setEditingBoss({ name: event.name, tempTime: formatToHHMM(history[event.name]?.lastKill) })}
-                                            className={`relative p-2.5 rounded-xl border cursor-pointer transition-all ${active ? 'bg-red-950/40 border-red-500 animate-pulse' : 'bg-slate-900/50 border-slate-800 hover:border-slate-600'}`}
-                                        >
-                                            <div className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-slate-800 border border-slate-700 rounded-full flex items-center justify-center text-[8px] font-bold text-slate-400 shadow-lg z-10">
-                                                {index + 1}
-                                            </div>
-                                            {/* 次・次々のラベル表示 */}
-                                            <div className="absolute top-1 right-1 px-1 bg-slate-800/80 rounded text-[7px] text-slate-500 font-bold uppercase tracking-tighter">
-                                                {event.label}
-                                            </div>
-
-                                            <div className="flex justify-between items-center mb-1 pr-4">
-                                                <span className="text-[9px] text-slate-400 font-mono font-bold bg-slate-950/40 px-1 rounded">{formatCountdown(diff, true)}</span>
-                                                <span className={`text-[9px] font-bold ${event.color === 'purple' ? 'text-purple-400' : 'text-red-400'}`}>Lv.{event.lv}</span>
-                                            </div>
-                                            <div className="font-bold text-xs md:text-sm truncate text-white leading-tight mb-1">{event.name}</div>
-                                            <div className="text-sm md:text-base font-mono font-bold text-slate-100 flex items-center gap-1.5 mt-1 border-t border-white/5 pt-1">
-                                                <IconClock color={active ? "#ef4444" : "#94a3b8"} size={12} />
-                                                {formatPredictedTime(event.eventTime)}
-                                            </div>
+                            <div className="flex gap-3 overflow-x-auto pb-4 snap-x scrollbar-hide -mx-2 px-2">
+                                {top10.map((ev, i) => (
+                                    <div key={i} onClick={() => ev.type === 'interval' && setEditingBoss({name:ev.name, tempTime: formatToHHMM(ev.displayLastKill)})} className={`flex-none w-44 snap-start p-3 rounded-xl border relative ${ev.eventTime <= now ? 'bg-red-950/40 border-red-500 animate-pulse' : 'bg-slate-900 border-slate-800'}`}>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="text-[10px] bg-slate-800 px-1.5 rounded font-bold text-slate-400">{ev.label}</span>
+                                            <span className="text-[10px] font-bold text-red-400">Lv.{ev.lv}</span>
                                         </div>
-                                    );
-                                })}
+                                        <div className="font-bold text-sm truncate mb-1">{ev.name}</div>
+                                        <div className="text-xl font-mono font-bold text-white mb-1">{formatPredictedTime(ev.eventTime)}</div>
+                                        <div className="text-[10px] text-slate-400 flex items-center gap-1 mb-2">
+                                            <IconClock size={10} /> {formatCountdown(ev.eventTime - now)}
+                                        </div>
+                                        <div className="text-[9px] text-slate-500 truncate flex items-center gap-1">
+                                            <IconMap /> {ev.area}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
-                        {/* List Layout */}
-                        <div className="overflow-x-auto bg-slate-900 rounded-xl border border-slate-800 shadow-2xl mb-10">
-                            <table className="w-full text-left border-collapse min-w-[850px]">
-                                <thead className="bg-slate-950/50 border-b border-slate-800 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+                        {/* Table */}
+                        <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-2xl">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-slate-950/50 text-slate-500 text-[10px] font-bold uppercase">
                                     <tr>
-                                        <th className="px-3 py-3 w-8 text-center text-slate-700 font-mono italic">#</th>
-                                        <th className="px-3 py-3">名前 / Lv</th>
-                                        <th className="px-3 py-3 text-center">討伐記録</th>
-                                        <th className="px-3 py-3 text-center">出現予想</th>
-                                        <th className="px-3 py-3 text-center">周期・時間</th>
-                                        <th className="px-3 py-3 text-right">出現場所</th>
+                                        <th className="p-3">名前</th>
+                                        <th className="p-3 text-center">記録</th>
+                                        <th className="p-3 text-center">予想</th>
+                                        <th className="p-3 text-right">場所</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {displayBosses.map((boss, index) => {
+                                    {processedBosses.filter(b => b.name.includes(searchTerm)).map(boss => {
                                         const diff = boss.nextSpawn - now;
-                                        const active = boss.nextSpawn !== 0 && diff <= 0;
-                                        const lastKillTimeDisplay = formatToHHMM(boss.displayLastKill);
                                         return (
-                                            <tr key={boss.name} className={`border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors ${active ? 'bg-red-950/20' : ''}`}>
-                                                <td className="px-3 py-3 text-[10px] font-mono text-slate-600 text-center">
-                                                    {sortByTime ? index + 1 : boss.originalIndex + 1}
-                                                </td>
-                                                <td className="px-3 py-3">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className={`text-[9px] px-1 rounded font-mono font-bold ${boss.color === 'purple' ? 'bg-purple-500/20 text-purple-400' : 'bg-red-500/20 text-red-400'}`}>{boss.lv}</span>
-                                                        <span className={`font-bold text-sm whitespace-nowrap ${active ? 'text-red-400' : ''}`}>{boss.name}</span>
+                                            <tr key={boss.name} className="border-t border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                                                <td className="p-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[9px] font-bold text-slate-500 w-5">Lv.{boss.lv}</span>
+                                                        <span className="font-bold text-sm">{boss.name}</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-3 py-3 text-center">
+                                                <td className="p-2 text-center">
                                                     {boss.type === 'interval' ? (
-                                                        <div 
-                                                            onClick={() => setEditingBoss({ name: boss.name, tempTime: lastKillTimeDisplay })}
-                                                            className="inline-flex items-center justify-center gap-2 cursor-pointer group py-1 px-2 transition-colors"
-                                                        >
-                                                            <IconSword size={16} />
-                                                            <span className="font-mono text-xs text-slate-300 group-hover:text-red-400 font-bold">
-                                                                {lastKillTimeDisplay || "-----"}
-                                                            </span>
+                                                        <div onClick={() => setEditingBoss({name:boss.name, tempTime:formatToHHMM(boss.displayLastKill)})} className="cursor-pointer text-xs font-mono text-slate-400 hover:text-red-400">
+                                                            <IconSword /> {formatToHHMM(boss.displayLastKill) || "-----"}
                                                         </div>
-                                                    ) : (
-                                                        <div className="text-[9px] text-slate-600 italic font-mono uppercase">Fixed Time</div>
-                                                    )}
+                                                    ) : <span className="text-[10px] text-slate-600">定時</span>}
                                                 </td>
-                                                <td className="px-3 py-3 text-center">
-                                                    <span className={`text-sm md:text-base font-mono font-bold whitespace-nowrap ${active ? 'text-red-400' : 'text-slate-200'}`}>
-                                                        {formatPredictedTime(boss.nextSpawn)}
-                                                    </span>
+                                                <td className="p-2 text-center text-sm font-mono font-bold text-slate-200">
+                                                    {formatPredictedTime(boss.nextSpawn)}
                                                 </td>
-                                                <td className="px-3 py-3 text-center text-[10px] text-slate-400 font-mono whitespace-nowrap">
-                                                    {boss.type === 'interval' ? (
-                                                        <span>{boss.value}時間後</span>
-                                                    ) : boss.type === 'weekly' ? (
-                                                        <div className="flex flex-col">
-                                                            {boss.schedule.map((s, i) => (
-                                                                <span key={i}>{DAYS[s.day]} {s.time}</span>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <span>毎日 {boss.times.join(', ')}</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-3 py-3 text-right">
-                                                    <div className="flex items-center justify-end gap-1 whitespace-nowrap text-[10px] text-slate-500">
-                                                        <IconMap /> {boss.area}
-                                                    </div>
-                                                </td>
+                                                <td className="p-2 text-right text-[10px] text-slate-500">{boss.area}</td>
                                             </tr>
                                         );
                                     })}
                                 </tbody>
                             </table>
                         </div>
-
-                        <div className="text-[10px] text-slate-600 flex justify-between opacity-50 px-1 border-t border-slate-800 pt-4 mb-4">
-                            <p>※ 短サイクルのボスは「次々回」の予定も直近リストに表示されます。</p>
-                            <p className="font-mono italic uppercase text-right">L9 Tracker v2.6.0</p>
-                        </div>
                     </div>
 
-                    {/* --- 討伐時間入力用モーダル --- */}
+                    {/* Modal */}
                     {editingBoss && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm transition-all">
-                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl modal-enter">
-                                <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50">
-                                    <h3 className="font-bold text-red-500 flex items-center gap-2">
-                                        <IconSword size={16} /> {editingBoss.name}
-                                    </h3>
-                                    <button onClick={() => setEditingBoss(null)} className="text-slate-500 hover:text-white p-1 text-xl">&times;</button>
-                                </div>
-                                <div className="p-6">
-                                    <div className="mb-6 text-center">
-                                        <label className="block text-[10px] text-slate-500 mb-2 uppercase font-bold tracking-widest">討伐時間 (4桁入力)</label>
-                                        <input 
-                                            type="text" 
-                                            inputmode="numeric"
-                                            className="bg-slate-950 border-2 border-slate-700 focus:border-red-500 rounded-xl text-3xl font-mono text-center w-full py-4 text-slate-100 outline-none transition-all shadow-inner"
-                                            value={editingBoss.tempTime}
-                                            placeholder="-----"
-                                            onChange={(e) => setEditingBoss(prev => ({ ...prev, tempTime: e.target.value }))}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    handleSave();
-                                                }
-                                            }}
-                                            onFocus={(e) => e.target.select()}
-                                            autoFocus
-                                        />
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button 
-                                            onClick={setModalTimeToNow}
-                                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl transition-all btn-active border border-slate-700 text-sm"
-                                        >
-                                            現在時刻
-                                        </button>
-                                        <button 
-                                            onClick={handleSave}
-                                            className="bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl transition-all btn-active shadow-lg text-sm"
-                                        >
-                                            保存
-                                        </button>
-                                    </div>
-                                    <button 
-                                        onClick={() => setEditingBoss(null)}
-                                        className="w-full mt-4 text-slate-500 hover:text-slate-300 text-xs font-bold py-2"
-                                    >
-                                        キャンセル
-                                    </button>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm modal-enter">
+                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xs p-6 shadow-2xl">
+                                <h3 className="font-bold text-red-500 mb-4">{editingBoss.name} 討伐記録</h3>
+                                <input 
+                                    type="text" inputMode="numeric" 
+                                    className="bg-slate-950 border-2 border-slate-700 focus:border-red-500 rounded-xl text-3xl font-mono text-center w-full py-4 text-white outline-none mb-4"
+                                    value={editingBoss.tempTime} placeholder="00:00" autoFocus
+                                    onChange={e => setEditingBoss({...editingBoss, tempTime: e.target.value})}
+                                    onKeyDown={e => e.key === 'Enter' && handleSave()}
+                                />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button onClick={() => setEditingBoss(null)} className="py-2 bg-slate-800 rounded-xl text-sm font-bold text-slate-400">閉じる</button>
+                                    <button onClick={handleSave} className="py-2 bg-red-600 rounded-xl text-sm font-bold text-white shadow-lg shadow-red-600/20">保存</button>
                                 </div>
                             </div>
                         </div>
@@ -501,6 +355,20 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
+
+        const swCode = `
+            self.addEventListener('install', (event) => self.skipWaiting());
+            self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+            self.addEventListener('push', (event) => {
+                const data = event.data.json();
+                self.registration.showNotification(data.title, { body: data.body, icon: data.icon });
+            });
+        `;
+        const blob = new Blob([swCode], { type: 'text/javascript' });
+        const swUrl = URL.createObjectURL(blob);
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register(swUrl).catch(() => {});
+        }
     </script>
 </body>
 </html>
