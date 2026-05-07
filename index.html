@@ -319,6 +319,24 @@
                 setEditingBoss(p => ({ ...p, view: 'record' }));
             };
 
+            const handleDeleteHistory = async (idx) => {
+                if (!editingBoss) return;
+                const bossName = editingBoss.name;
+                const newLog = [...editingBoss.historyLog];
+                newLog.splice(idx, 1);
+                
+                const updateObj = { historyLog: newLog };
+                
+                // もし削除したのが最新で、他にも履歴があるなら、最新討伐時間も一つ前の記録に戻す（任意）
+                // ここでは単純に履歴配列の更新のみを行う
+                
+                setEditingBoss(p => ({ ...p, historyLog: newLog }));
+                setHistory(prev => ({ ...prev, [bossName]: { ...prev[bossName], ...updateObj } }));
+                try {
+                    await db.collection(`artifacts/${appId}/public/data/boss_status`).doc(bossName).update(updateObj);
+                } catch (e) {}
+            };
+
             const openEdit = (boss) => {
                 setEditingBoss({
                     ...boss, 
@@ -346,7 +364,7 @@
             };
 
             return (
-                <div className="min-h-screen p-2 md:p-6 pb-20 relative text-slate-200">
+                <div className="min-h-screen p-2 md:p-6 pb-20 relative text-slate-200 font-sans tracking-tight">
                     <div className="max-w-6xl mx-auto">
                         
                         {/* Header */}
@@ -550,14 +568,23 @@
                                                     <div className="text-center py-10 text-slate-600 text-xs font-bold uppercase tracking-widest">記録なし</div>
                                                 ) : (
                                                     editingBoss.historyLog.map((log, i) => (
-                                                        <div key={i} className="flex justify-between items-center bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
+                                                        <div key={i} className="flex justify-between items-center bg-slate-950/50 p-3 rounded-lg border border-slate-800/50 group">
                                                             <div className="flex flex-col">
                                                                 <span className="text-[10px] text-slate-500 font-bold uppercase">討伐時間</span>
                                                                 <span className="text-base font-mono font-bold text-orange-400">{formatToMDHM(log.timestamp)}</span>
                                                             </div>
-                                                            <div className="text-right">
-                                                                <span className="text-[9px] text-slate-600 block">記録日時</span>
-                                                                <span className="text-[10px] text-slate-400 font-mono">{formatToHHMM(log.recordedAt)}</span>
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="text-right">
+                                                                    <span className="text-[9px] text-slate-600 block">記録日時</span>
+                                                                    <span className="text-[10px] text-slate-400 font-mono">{formatToHHMM(log.recordedAt)}</span>
+                                                                </div>
+                                                                <button 
+                                                                    onClick={() => handleDeleteHistory(i)}
+                                                                    className="p-2 text-slate-700 hover:text-red-500 bg-slate-900/50 hover:bg-red-500/10 rounded-lg transition-all"
+                                                                    title="この記録を削除"
+                                                                >
+                                                                    <IconTrash size={14} />
+                                                                </button>
                                                             </div>
                                                         </div>
                                                     ))
