@@ -173,19 +173,41 @@
             return isDifferentDay ? `${DAYS[d.getDay()]} ${timeStr}` : timeStr;
         };
 
-        const parseTimeInputToTimestamp = (timeStr) => {
-            if (!timeStr) return 0;
-            let clean = timeStr.replace(/\D/g, '');
+        // --- 改良版: 日付指定対応のパース処理 ---
+        const parseTimeInputToTimestamp = (str) => {
+            if (!str) return 0;
+            
+            // パターン1: YYYY/MM/DD HH:MM (フル指定)
+            const fullDateMatch = str.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})\s+(\d{1,2})[:]?(\d{2})$/);
+            if (fullDateMatch) {
+                const [_, y, m, d, hh, mm] = fullDateMatch;
+                return new Date(parseInt(y), parseInt(m) - 1, parseInt(d), parseInt(hh), parseInt(mm)).getTime();
+            }
+
+            // パターン2: MM/DD HH:MM (今年の日付指定)
+            const shortDateMatch = str.match(/^(\d{1,2})[/-](\d{1,2})\s+(\d{1,2})[:]?(\d{2})$/);
+            if (shortDateMatch) {
+                const [_, m, d, hh, mm] = shortDateMatch;
+                const now = new Date();
+                return new Date(now.getFullYear(), parseInt(m) - 1, parseInt(d), parseInt(hh), parseInt(mm)).getTime();
+            }
+
+            // パターン3: HH:MM or HHMM (従来の挙動)
+            let clean = str.replace(/\D/g, '');
             if (clean.length === 3) clean = '0' + clean;
-            if (clean.length !== 4) return 0;
-            const h = parseInt(clean.substring(0, 2));
-            const m = parseInt(clean.substring(2, 4));
-            if (h >= 24 || m >= 60) return 0;
-            const now = new Date();
-            const d = new Date();
-            d.setHours(h, m, 0, 0);
-            if (d.getTime() > now.getTime()) d.setDate(d.getDate() - 1);
-            return d.getTime();
+            if (clean.length === 4) {
+                const h = parseInt(clean.substring(0, 2));
+                const m = parseInt(clean.substring(2, 4));
+                if (h < 24 && m < 60) {
+                    const now = new Date();
+                    const d = new Date();
+                    d.setHours(h, m, 0, 0);
+                    // 入力された時間が今より未来なら、昨日のことだと判断する（従来の便利機能）
+                    if (d.getTime() > now.getTime()) d.setDate(d.getDate() - 1);
+                    return d.getTime();
+                }
+            }
+            return 0;
         };
 
         function App() {
@@ -194,7 +216,7 @@
                 return saved ? JSON.parse(saved) : {};
             });
             const [topLvFilter, setTopLvFilter] = useState('ALL');
-            const [mainSortMode, setMainSortMode] = useState('DEFAULT'); // DEFAULT, LEVEL, NAME, TIME
+            const [mainSortMode, setMainSortMode] = useState('DEFAULT'); 
             const [now, setNow] = useState(Date.now());
             const [isOnline, setIsOnline] = useState(false);
             const [editingBoss, setEditingBoss] = useState(null); 
@@ -510,8 +532,23 @@
                                             {editingBoss.type === 'interval' ? (
                                                 <>
                                                     <div className="mb-4">
-                                                        <label className="text-[10px] text-slate-500 font-bold mb-1 block uppercase tracking-widest">討伐時間 (HH:MM)</label>
-                                                        <input type="text" inputMode="numeric" className="bg-slate-950 border-2 border-slate-700 focus:border-red-500 rounded-xl text-2xl font-mono text-center w-full py-2 text-slate-100 outline-none" value={editingBoss.tempTime} placeholder="00:00" onChange={(e) => { let val = e.target.value; if (val.length === 2 && !val.includes(':') && e.nativeEvent.inputType !== 'deleteContentBackward') val = val + ':'; setEditingBoss(prev => ({ ...prev, tempTime: val })); }} onKeyDown={(e) => e.key === 'Enter' && handleSaveRecord()} />
+                                                        <div className="flex justify-between items-end mb-1">
+                                                            <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">討伐時間を入力</label>
+                                                            <span className="text-[8px] text-slate-600 font-bold italic">例: 5/10 11:00</span>
+                                                        </div>
+                                                        <input 
+                                                            type="text" 
+                                                            className="bg-slate-950 border-2 border-slate-700 focus:border-red-500 rounded-xl text-xl font-mono text-center w-full py-2 text-slate-100 outline-none" 
+                                                            value={editingBoss.tempTime} 
+                                                            placeholder="00:00 (日付指定可)" 
+                                                            onChange={(e) => { 
+                                                                let val = e.target.value; 
+                                                                // 数字のみ4桁入力(HHMM)の補助機能: 2桁の時に自動でコロンを入れる
+                                                                if (/^\d{2}$/.test(val) && e.nativeEvent.inputType !== 'deleteContentBackward') val = val + ':'; 
+                                                                setEditingBoss(prev => ({ ...prev, tempTime: val })); 
+                                                            }} 
+                                                            onKeyDown={(e) => e.key === 'Enter' && handleSaveRecord()} 
+                                                        />
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2 mb-4">
                                                         <button onClick={() => setEditingBoss(p => ({ ...p, tempTime: formatToHHMM(Date.now()) }))} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 rounded-xl border border-slate-700 text-xs transition-colors">現在時刻</button>
