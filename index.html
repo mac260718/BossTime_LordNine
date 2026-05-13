@@ -53,6 +53,7 @@
         const IconTrash = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>;
         const IconPlus = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
         const IconSort = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="m15 18-3 3-3-3"/><path d="M12 3v18"/><path d="m9 6 3-3 3 3"/></svg>;
+        const IconTool = ({size=18, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>;
 
         const BOSS_DATA_RAW = [
             { lv: 60, name: "ベナトゥス", type: "interval", value: 10, area: "汚染された川筋", color: "red" },
@@ -173,33 +174,59 @@
             return isDifferentDay ? `${DAYS[d.getDay()]} ${timeStr}` : timeStr;
         };
 
-        const parseTimeInputToTimestamp = (str) => {
+        // --- 汎用パース処理 ---
+        const parseTimeInputToTimestamp = (str, isStrictToday = false) => {
             if (!str) return 0;
+            
+            // パターン1: YYYY/MM/DD HH:MM
             const fullDateMatch = str.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})\s+(\d{1,2})[:]?(\d{2})$/);
             if (fullDateMatch) {
                 const [_, y, m, d, hh, mm] = fullDateMatch;
                 return new Date(parseInt(y), parseInt(m) - 1, parseInt(d), parseInt(hh), parseInt(mm)).getTime();
             }
+
+            // パターン2: MM/DD HH:MM
             const shortDateMatch = str.match(/^(\d{1,2})[/-](\d{1,2})\s+(\d{1,2})[:]?(\d{2})$/);
             if (shortDateMatch) {
                 const [_, m, d, hh, mm] = shortDateMatch;
                 const now = new Date();
                 return new Date(now.getFullYear(), parseInt(m) - 1, parseInt(d), parseInt(hh), parseInt(mm)).getTime();
             }
+
+            // パターン3: HH:MM or HHMM
             let clean = str.replace(/\D/g, '');
             if (clean.length === 3) clean = '0' + clean;
             if (clean.length === 4) {
                 const h = parseInt(clean.substring(0, 2));
                 const m = parseInt(clean.substring(2, 4));
                 if (h < 24 && m < 60) {
-                    const now = new Date();
                     const d = new Date();
                     d.setHours(h, m, 0, 0);
-                    if (d.getTime() > now.getTime()) d.setDate(d.getDate() - 1);
+                    // 通常の討伐入力なら「未来なら昨日にずらす」。メンテリセット等の厳格な指定ならそのまま。
+                    if (!isStrictToday) {
+                        const now = new Date();
+                        if (d.getTime() > now.getTime()) d.setDate(d.getDate() - 1);
+                    }
                     return d.getTime();
                 }
             }
             return 0;
+        };
+
+        // --- 修正された入力制御ロジック ---
+        const handleSafeTimeInput = (rawVal, setter) => {
+            // スラッシュやスペースがある場合はオートフォーマット停止
+            if (/[/-]|\s/.test(rawVal)) {
+                setter(rawVal);
+                return;
+            }
+            
+            let digits = rawVal.replace(/\D/g, '').slice(0, 4);
+            if (digits.length >= 3) {
+                setter(digits.slice(0, 2) + ':' + digits.slice(2));
+            } else {
+                setter(digits);
+            }
         };
 
         function App() {
@@ -212,6 +239,8 @@
             const [now, setNow] = useState(Date.now());
             const [isOnline, setIsOnline] = useState(false);
             const [editingBoss, setEditingBoss] = useState(null); 
+            const [isMaintResetOpen, setIsMaintResetOpen] = useState(false);
+            const [maintInput, setMaintTime] = useState("");
 
             useEffect(() => {
                 const initFirebase = async () => {
@@ -336,6 +365,33 @@
                 setEditingBoss(p => ({ ...p, view: 'record' }));
             };
 
+            const handleMaintReset = async () => {
+                // strict指定により「今から14時」を正確に取得
+                const targetTs = parseTimeInputToTimestamp(maintInput, true);
+                if (!targetTs) return;
+
+                const batch = db.batch();
+                BOSS_DATA_RAW.forEach(boss => {
+                    if (boss.type === 'interval') {
+                        const cycle = history[boss.name]?.customInterval || boss.value;
+                        const intervalMs = cycle * 3600 * 1000;
+                        // 次の出現時間がtargetTsピッタリになるように lastKill を設定
+                        const newLastKill = targetTs - intervalMs;
+                        
+                        const ref = db.collection(`artifacts/${appId}/public/data/boss_status`).doc(boss.name);
+                        const currentLog = history[boss.name]?.historyLog || [];
+                        const newLog = [{ timestamp: newLastKill, recordedAt: Date.now(), isMaint: true }, ...currentLog].slice(0, 10);
+                        batch.set(ref, { lastKill: newLastKill, historyLog: newLog }, { merge: true });
+                    }
+                });
+
+                try {
+                    await batch.commit();
+                    setIsMaintResetOpen(false);
+                    setMaintTime("");
+                } catch (e) {}
+            };
+
             const handleDeleteHistory = async (idx) => {
                 if (!editingBoss) return;
                 const bossName = editingBoss.name;
@@ -365,22 +421,19 @@
                         
                         {/* Header */}
                         <div className="flex justify-between items-center mb-6 sticky top-0 bg-slate-950/95 py-2 z-30 shadow-md">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
                                 <h1 className="text-xl font-bold text-red-500 flex items-center gap-2">
                                     <IconClock size={24} /> LORD NINE
                                 </h1>
-                                <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div>
+                                <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500 animate-pulse'}`}></div>
+                                <button onClick={() => setIsMaintResetOpen(true)} className="p-1.5 ml-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors border border-slate-700/50" title="メンテリセット"><IconTool size={18} /></button>
                             </div>
                             <div className="flex flex-col items-end">
-                                <div className="text-2xl md:text-3xl font-mono font-bold text-slate-100 leading-none">
-                                    {new Date(now).getHours()}:{new Date(now).getMinutes().toString().padStart(2, '0')}
-                                </div>
+                                <div className="text-2xl md:text-3xl font-mono font-bold text-slate-100 leading-none">{new Date(now).getHours()}:{new Date(now).getMinutes().toString().padStart(2, '0')}</div>
                                 {globalMostRecent && (
                                     <div className="mt-1 flex items-center gap-1.5 bg-slate-900/50 px-2 py-0.5 rounded border border-slate-800/50">
                                         <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Next</span>
-                                        <span className="text-[11px] font-mono font-bold text-red-400">
-                                            {formatHeaderCountdown(globalMostRecent.eventTime - now)}
-                                        </span>
+                                        <span className="text-[11px] font-mono font-bold text-red-400">{formatHeaderCountdown(globalMostRecent.eventTime - now)}</span>
                                     </div>
                                 )}
                             </div>
@@ -452,21 +505,12 @@
                                     <div className="flex flex-col overflow-hidden">
                                         <div className="p-4 border-b border-slate-800 bg-slate-950/50">
                                             <div className="flex items-center justify-between mb-1">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-red-500 font-mono font-bold text-xs">Lv.{editingBoss.lv}</span>
-                                                    <h3 className="font-bold text-white text-lg">{editingBoss.name}</h3>
-                                                </div>
+                                                <div className="flex items-center gap-1.5"><span className="text-red-500 font-mono font-bold text-xs">Lv.{editingBoss.lv}</span><h3 className="font-bold text-white text-lg">{editingBoss.name}</h3></div>
                                                 <button onClick={() => setEditingBoss(p => ({ ...p, view: 'history' }))} className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-colors"><IconHistory size={20} /></button>
                                             </div>
                                             <div className="text-xs text-slate-400 flex items-center gap-1 mb-3"><IconMap size={12} color="#94a3b8" /> {editingBoss.area}</div>
                                             <div className="flex justify-between items-center">
-                                                <div 
-                                                    className="text-[10px] text-orange-500 font-bold bg-orange-500/10 px-2 py-1 rounded border border-orange-500/20 flex items-center gap-1.5 cursor-pointer hover:bg-orange-500/20 transition-all" 
-                                                    onClick={() => setEditingBoss(p => ({ ...p, view: 'settings' }))}
-                                                >
-                                                    {editingBoss.type === 'interval' ? `周期: ${editingBoss.tempInterval}h` : '定時ボス'}
-                                                    <IconSettings size={10} />
-                                                </div>
+                                                <div className="text-[10px] text-orange-500 font-bold bg-orange-500/10 px-2 py-1 rounded border border-orange-500/20 flex items-center gap-1.5 cursor-pointer hover:bg-orange-500/20 transition-all" onClick={() => setEditingBoss(p => ({ ...p, view: 'settings' }))}>{editingBoss.type === 'interval' ? `周期: ${editingBoss.tempInterval}h` : '定時ボス'}<IconSettings size={10} /></div>
                                                 <div className="flex items-center gap-2">{editingBoss.isAutoUpdated && <span className="text-[9px] font-bold text-red-500 uppercase">Auto</span>}{formatCountdown((editingBoss.eventTime || editingBoss.nextSpawn) - now)}</div>
                                             </div>
                                         </div>
@@ -474,7 +518,7 @@
                                             {editingBoss.type === 'interval' ? (
                                                 <div className="mb-4">
                                                     <div className="flex justify-between items-end mb-1"><label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">討伐時間を入力</label><span className="text-[8px] text-slate-600 font-bold italic">例: 5/10 11:00</span></div>
-                                                    <input type="text" className="bg-slate-950 border-2 border-slate-700 focus:border-red-500 rounded-xl text-xl font-mono text-center w-full py-2 text-slate-100 outline-none" value={editingBoss.tempTime} placeholder="00:00 (日付指定可)" onChange={(e) => { let val = e.target.value; if (/^\d{2}$/.test(val) && e.nativeEvent.inputType !== 'deleteContentBackward') val = val + ':'; setEditingBoss(prev => ({ ...prev, tempTime: val })); }} onKeyDown={(e) => e.key === 'Enter' && handleSaveRecord()} />
+                                                    <input type="text" className="bg-slate-950 border-2 border-slate-700 focus:border-red-500 rounded-xl text-xl font-mono text-center w-full py-2 text-slate-100 outline-none" value={editingBoss.tempTime} placeholder="00:00 (日付指定可)" onChange={(e) => handleSafeTimeInput(e.target.value, (v) => setEditingBoss(prev => ({ ...prev, tempTime: v })))} onKeyDown={(e) => e.key === 'Enter' && handleSaveRecord()} />
                                                     <div className="grid grid-cols-2 gap-2 mt-4"><button onClick={() => setEditingBoss(p => ({ ...p, tempTime: formatToHHMM(Date.now()) }))} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 rounded-xl border border-slate-700 text-xs transition-colors">現在時刻</button><button onClick={handleSaveRecord} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl shadow-lg text-xs transition-colors">保存</button></div>
                                                 </div>
                                             ) : (
@@ -493,7 +537,7 @@
                                             <div className="space-y-1 mb-6">
                                                 {(!editingBoss.historyLog || editingBoss.historyLog.length === 0) ? (<div className="text-center py-10 text-slate-600 text-xs font-bold uppercase tracking-widest">記録なし</div>) : (
                                                     editingBoss.historyLog.map((log, i) => (
-                                                        <div key={i} className="flex justify-between items-center bg-slate-950/50 p-3 rounded-lg border border-slate-800/50 group"><div className="flex flex-col"><span className="text-[10px] text-slate-500 font-bold uppercase">討伐時間</span><span className="text-base font-mono font-bold text-orange-400">{formatToMDHM(log.timestamp)}</span></div><div className="flex items-center gap-3"><div className="text-right"><span className="text-[9px] text-slate-600 block">記録日時</span><span className="text-[10px] text-slate-400 font-mono">{formatToHHMM(log.recordedAt)}</span></div><button onClick={() => handleDeleteHistory(i)} className="p-2 text-slate-700 hover:text-red-500 bg-slate-900/50 hover:bg-red-500/10 rounded-lg transition-all"><IconTrash size={14} /></button></div></div>
+                                                        <div key={i} className="flex justify-between items-center bg-slate-950/50 p-3 rounded-lg border border-slate-800/50 group"><div className="flex flex-col"><span className="text-[10px] text-slate-500 font-bold uppercase">{log.isMaint ? 'メンテ終了' : '討伐時間'}</span><span className="text-base font-mono font-bold text-orange-400">{formatToMDHM(log.timestamp + (log.isMaint ? (editingBoss.currentCycle * 3600000) : 0))}</span></div><div className="flex items-center gap-3"><div className="text-right"><span className="text-[9px] text-slate-600 block">記録日時</span><span className="text-[10px] text-slate-400 font-mono">{formatToHHMM(log.recordedAt)}</span></div><button onClick={() => handleDeleteHistory(i)} className="p-2 text-slate-700 hover:text-red-500 bg-slate-900/50 hover:bg-red-500/10 rounded-lg transition-all"><IconTrash size={14} /></button></div></div>
                                                     ))
                                                 )}
                                             </div>
@@ -515,6 +559,24 @@
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Maintenance Reset Modal */}
+                    {isMaintResetOpen && (
+                        <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 bg-black/90 backdrop-blur-md pt-24 modal-enter">
+                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[340px] overflow-hidden shadow-2xl p-6">
+                                <div className="flex items-center gap-3 mb-4 text-orange-500"><IconTool size={24} /><h3 className="font-bold text-white text-lg">メンテナンス・リセット</h3></div>
+                                <p className="text-xs text-slate-400 mb-6 leading-relaxed">指定した時刻に<b>全てのボスが出現</b>するように設定します。<br/>※定時ボスは影響を受けません。</p>
+                                <div className="mb-6">
+                                    <label className="text-[10px] text-slate-500 font-bold mb-1 block uppercase tracking-widest">メンテ終了時刻 (HH:MM)</label>
+                                    <input type="text" className="bg-slate-950 border-2 border-slate-700 focus:border-orange-500 rounded-xl text-3xl font-mono text-center w-full py-3 text-orange-400 outline-none" value={maintInput} placeholder="14:00" onChange={(e) => handleSafeTimeInput(e.target.value, setMaintTime)} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button onClick={() => setIsMaintResetOpen(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3 rounded-xl text-xs transition-colors">キャンセル</button>
+                                    <button onClick={handleMaintReset} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg text-xs transition-colors active:scale-95">リセット実行</button>
+                                </div>
                             </div>
                         </div>
                     )}
