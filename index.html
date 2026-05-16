@@ -28,7 +28,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- 1. React & Constants ---
+        // --- 1. Constants & React Hooks ---
         const { useState, useEffect, useMemo, useRef } = React;
         const DAYS = ["日", "月", "火", "水", "木", "金", "土"];
         const GRACE_PERIOD = 10 * 60 * 1000;
@@ -103,8 +103,8 @@
         const formatPredictedTime = (ts) => {
             if (!ts) return "---";
             const d = new Date(ts);
-            const now = new Date();
-            const isDifferentDay = d.getDate() !== now.getDate() || d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear();
+            const nowTime = new Date();
+            const isDifferentDay = d.getDate() !== nowTime.getDate() || d.getMonth() !== nowTime.getMonth() || d.getFullYear() !== nowTime.getFullYear();
             const hh = String(d.getHours()).padStart(2, '0');
             const mm = String(d.getMinutes()).padStart(2, '0');
             const timeStr = `${hh}:${mm}`;
@@ -122,14 +122,14 @@
 
         const getNextWeeklyTime = (schedule) => {
             if (!schedule || schedule.length === 0) return 0;
-            const now = new Date();
+            const nowTime = new Date();
             const options = schedule.map(s => {
                 let next = new Date();
                 const [h, m] = s.time.split(':').map(Number);
                 next.setHours(h, m, 0, 0);
-                let dayDiff = s.day - now.getDay();
-                if (dayDiff < 0 || (dayDiff === 0 && next < now)) dayDiff += 7;
-                next.setDate(now.getDate() + dayDiff);
+                let dayDiff = s.day - nowTime.getDay();
+                if (dayDiff < 0 || (dayDiff === 0 && next < nowTime)) dayDiff += 7;
+                next.setDate(nowTime.getDate() + dayDiff);
                 return next.getTime();
             });
             return Math.min(...options);
@@ -137,12 +137,12 @@
 
         const getNextDailyTime = (times) => {
             if (!times || times.length === 0) return 0;
-            const now = new Date();
+            const nowTime = new Date();
             const options = times.map(t => {
                 let next = new Date();
                 const [h, m] = t.split(':').map(Number);
                 next.setHours(h, m, 0, 0);
-                if (next < now) next.setDate(now.getDate() + 1);
+                if (next < nowTime) next.setDate(nowTime.getDate() + 1);
                 return next.getTime();
             });
             return Math.min(...options);
@@ -174,8 +174,8 @@
             const shortDateMatch = normalized.match(/^(\d{1,2})[/-](\d{1,2})\s+(\d{1,2})[:]?(\d{2})$/);
             if (shortDateMatch) {
                 const [_, m, d, hh, mm] = shortDateMatch;
-                const now = new Date();
-                return new Date(now.getFullYear(), parseInt(m) - 1, parseInt(d), parseInt(hh), parseInt(mm)).getTime();
+                const nowTime = new Date();
+                return new Date(nowTime.getFullYear(), parseInt(m) - 1, parseInt(d), parseInt(hh), parseInt(mm)).getTime();
             }
             let clean = normalized.replace(/\D/g, '');
             if (clean.length === 3) clean = '0' + clean;
@@ -186,8 +186,8 @@
                     const d = new Date();
                     d.setHours(h, m, 0, 0);
                     if (!isStrictToday) {
-                        const now = new Date();
-                        if (d.getTime() > now.getTime()) d.setDate(d.getDate() - 1);
+                        const nowTime = new Date();
+                        if (d.getTime() > nowTime.getTime()) d.setDate(d.getDate() - 1);
                     }
                     return d.getTime();
                 }
@@ -217,13 +217,13 @@
         const IconEdit = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>;
         const IconSort = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="m15 18-3 3-3-3"/><path d="M12 3v18"/><path d="m9 6 3-3 3 3"/></svg>;
 
-        // --- 4. Main Component ---
+        // --- 4. Main Application Component ---
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
 
         function App() {
-            const [activeTab, setActiveTab] = useState('timer'); // timer, chat, tools
+            const [activeTab, setActiveTab] = useState('timer'); 
             const [history, setHistory] = useState(() => {
                 const saved = localStorage.getItem(STORAGE_KEY);
                 return saved ? JSON.parse(saved) : {};
@@ -248,12 +248,14 @@
                         await auth.signInAnonymously();
                         setIsOnline(true);
                         
+                        // Boss Status Sync
                         db.collection(`artifacts/${appId}/public/data/boss_status`).onSnapshot(snapshot => {
                             const data = {};
                             snapshot.forEach(doc => { data[doc.id] = doc.data(); });
                             setHistory(prev => ({ ...prev, ...data }));
                         });
 
+                        // Links Sync
                         db.collection(`artifacts/${appId}/public/data/utility_links`).onSnapshot(snapshot => {
                             const data = [];
                             snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
@@ -263,11 +265,13 @@
                             setUtilityLinks(data.sort((a, b) => (a.order || 0) - (b.order || 0)));
                         });
 
+                        // Chat Sync
                         db.collection(`artifacts/${appId}/public/data/chat_messages`).onSnapshot(snapshot => {
                             const data = [];
                             snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
                             setMessages(data.sort((a, b) => a.timestamp - b.timestamp));
                         });
+
                     } catch (e) { setIsOnline(false); }
                 };
                 initFirebase();
@@ -277,6 +281,7 @@
 
             useEffect(() => { if (activeTab === 'chat') chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, activeTab]);
 
+            // Filtered pinned messages for the persistent memo area
             const pinnedMessages = useMemo(() => messages.filter(m => m.isPinned).sort((a, b) => b.timestamp - a.timestamp).slice(0, 10), [messages]);
 
             const processedBosses = useMemo(() => {
@@ -312,7 +317,10 @@
                 const events = [];
                 processedBosses.forEach(boss => {
                     if (boss.nextSpawn === 0) return;
-                    if (boss.name !== 'ネドラ' && topLvFilter !== 'ALL' && !(boss.lv >= 60 && boss.lv <= 100)) return;
+                    
+                    // Filter Logic: ALL or 60-100
+                    if (topLvFilter === '60-100' && !(boss.lv >= 60 && boss.lv <= 100)) return;
+
                     if (boss.nextSpawn > now - GRACE_PERIOD) events.push({ ...boss, eventTime: boss.nextSpawn });
                     if (boss.type === 'interval') {
                         const intervalMs = boss.currentCycle * 3600 * 1000;
@@ -338,6 +346,7 @@
                 }
             }, [processedBosses, mainSortMode]);
 
+            // Database Actions
             const handleSaveRecord = async () => {
                 if (!editingBoss) return;
                 const ts = parseTimeInputToTimestamp(editingBoss.tempTime);
@@ -349,19 +358,23 @@
                 setEditingBoss(null);
             };
 
-            const handleSaveSettings = async () => {
-                if (!editingBoss) return;
-                const updateObj = {};
-                if (editingBoss.type === 'interval') {
-                    const val = parseFloat(editingBoss.tempInterval);
-                    if (!isNaN(val)) updateObj.customInterval = val;
-                } else if (editingBoss.type === 'weekly') {
-                    updateObj.customWeeklySchedule = editingBoss.tempWeeklySchedule;
-                } else if (editingBoss.type === 'daily') {
-                    updateObj.customDailyTimes = editingBoss.tempDailyTimes;
-                }
-                await db.collection(`artifacts/${appId}/public/data/boss_status`).doc(editingBoss.name).set(updateObj, { merge: true });
-                setEditingBoss(p => ({ ...p, view: 'record' }));
+            const handleSendChat = async () => {
+                if (!chatInput.trim()) return;
+                await db.collection(`artifacts/${appId}/public/data/chat_messages`).add({
+                    text: chatInput,
+                    timestamp: Date.now(),
+                    userId: auth.currentUser?.uid || 'anon',
+                    isPinned: false
+                });
+                setChatInput("");
+            };
+
+            const togglePinChat = async (id, current) => {
+                await db.collection(`artifacts/${appId}/public/data/chat_messages`).doc(id).update({ isPinned: !current });
+            };
+
+            const deleteChat = async (id) => {
+                await db.collection(`artifacts/${appId}/public/data/chat_messages`).doc(id).delete();
             };
 
             const handleMaintReset = async () => {
@@ -394,39 +407,18 @@
                 setLinkModal(null);
             };
 
-            const handleSendChat = async () => {
-                if (!chatInput.trim()) return;
-                await db.collection(`artifacts/${appId}/public/data/chat_messages`).add({
-                    text: chatInput,
-                    timestamp: Date.now(),
-                    userId: auth.currentUser?.uid || 'anon',
-                    isPinned: false
-                });
-                setChatInput("");
-            };
-
-            const togglePinChat = async (id, current) => {
-                await db.collection(`artifacts/${appId}/public/data/chat_messages`).doc(id).update({ isPinned: !current });
-            };
-
-            const deleteChat = async (id) => {
-                await db.collection(`artifacts/${appId}/public/data/chat_messages`).doc(id).delete();
-            };
-
             return (
                 <div className="min-h-screen flex flex-col relative text-slate-200 font-sans tracking-tight">
-                    {/* Persistent Header */}
+                    {/* Header with Navigation */}
                     <div className="bg-slate-950/95 sticky top-0 z-50 border-b border-slate-800 shadow-md">
                         <div className="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
                             <div className="flex items-center gap-2">
                                 <h1 className="text-xl font-bold text-red-500 flex items-center gap-2"><IconClock size={24} /> LORD NINE</h1>
                                 <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500 animate-pulse'}`}></div>
                             </div>
-                            <div className="text-right">
-                                <div className="text-xl font-mono font-bold text-slate-100">{new Date(now).getHours()}:{new Date(now).getMinutes().toString().padStart(2, '0')}</div>
-                            </div>
+                            <div className="text-xl font-mono font-bold text-slate-100">{new Date(now).getHours()}:{new Date(now).getMinutes().toString().padStart(2, '0')}</div>
                         </div>
-                        {/* Tabs */}
+                        
                         <div className="max-w-6xl mx-auto flex">
                             {[
                                 { id: 'timer', label: '出現時間', icon: <IconClock size={14}/> },
@@ -437,18 +429,19 @@
                             ))}
                         </div>
 
-                        {/* Pinned Messages Area (Visible in all tabs) */}
+                        {/* Pinned Messages Area - MATCHED FONT SIZE */}
                         {pinnedMessages.length > 0 && (
                             <div className="max-w-6xl mx-auto bg-red-950/20 border-b border-red-500/20 px-4 py-2">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <IconPin size={10} color="#ef4444" filled />
-                                    <span className="text-[9px] font-bold text-red-500 uppercase tracking-widest">お気に入り (ピン留め)</span>
+                                    <IconPin size={12} color="#ef4444" filled />
+                                    <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">お気に入り (ピン留め)</span>
                                 </div>
-                                <div className="max-h-[80px] overflow-y-auto scrollbar-hide space-y-1">
+                                <div className="max-h-[100px] overflow-y-auto scrollbar-hide space-y-1.5">
                                     {pinnedMessages.map(m => (
-                                        <div key={m.id} className="flex justify-between items-start gap-2 bg-slate-900/50 p-1.5 rounded border border-red-500/10 group">
-                                            <div className="text-[10px] text-slate-200 leading-tight flex-grow whitespace-pre-wrap">{m.text}</div>
-                                            <button onClick={() => togglePinChat(m.id, true)} className="text-red-500 opacity-60 hover:opacity-100 transition-opacity"><IconPin size={10} filled /></button>
+                                        <div key={m.id} className="flex justify-between items-start gap-3 bg-slate-900/60 p-2 rounded-lg border border-red-500/10 group shadow-sm">
+                                            {/* text-[13px] to match general UI text */}
+                                            <div className="text-[13px] text-slate-200 leading-normal flex-grow whitespace-pre-wrap">{m.text}</div>
+                                            <button onClick={() => togglePinChat(m.id, true)} className="text-red-500 opacity-60 hover:opacity-100 transition-opacity pt-0.5"><IconPin size={14} filled /></button>
                                         </div>
                                     ))}
                                 </div>
@@ -460,9 +453,21 @@
                         {activeTab === 'timer' && (
                             <div className="modal-enter">
                                 <div className="flex justify-end mb-4">
-                                    <button onClick={() => setIsMaintResetOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-bold border border-slate-700/50 text-orange-400"><IconTool size={14} /> メンテ一括リセット</button>
+                                    <button onClick={() => setIsMaintResetOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-bold border border-slate-700/50 text-orange-400">
+                                        <IconTool size={14} /> メンテ一括リセット
+                                    </button>
                                 </div>
+                                
+                                {/* REINSTATED: Level Filter Section */}
                                 <div className="mb-6">
+                                    <div className="flex items-center justify-between mb-3 px-1">
+                                        <div className="flex items-center gap-2 text-slate-400 font-bold uppercase text-[10px]"><IconClock size={16} /> 直近 10体</div>
+                                        <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+                                            {['ALL', '60-100'].map(f => (
+                                                <button key={f} onClick={() => setTopLvFilter(f)} className={`px-2 py-1 rounded text-[9px] font-bold transition-all ${topLvFilter === f ? 'bg-red-600 text-white' : 'text-slate-500'}`}>{f}</button>
+                                            ))}
+                                        </div>
+                                    </div>
                                     <div className="bg-slate-900/60 rounded-xl border border-slate-800 shadow-xl overflow-x-auto">
                                         <table className="w-full text-left border-collapse min-w-[340px] table-fixed">
                                             <thead className="bg-slate-950/50 border-b border-slate-800 text-slate-500 text-[9px] font-bold uppercase tracking-wider">
@@ -480,31 +485,43 @@
                                         </table>
                                     </div>
                                 </div>
-                                <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-2xl overflow-hidden mb-10">
-                                    <table className="w-full text-left border-collapse table-fixed">
-                                        <thead className="bg-slate-950/50 border-b border-slate-800 text-slate-500 text-[9px] font-bold uppercase tracking-wider">
-                                            <tr><th className="px-2 py-2 w-[10%] text-center">No.</th><th className="px-2 py-2 w-[45%]">名前 / Lv</th><th className="px-2 py-2 w-[45%] text-center">予想時間</th></tr>
-                                        </thead>
-                                        <tbody>
-                                            {sortedMainList.map((boss, idx) => {
-                                                const active = boss.nextSpawn !== 0 && (boss.nextSpawn - now <= 0);
-                                                return (
-                                                    <tr key={boss.name} onClick={() => setEditingBoss({...boss, view: 'record', tempTime: formatToHHMM(boss.displayLastKill)})} className={`border-b border-slate-800/50 hover:bg-slate-800/30 cursor-pointer transition-colors ${active ? 'bg-red-950/20' : ''}`}>
-                                                        <td className="px-2 py-2 text-[10px] font-mono text-slate-600 text-center">{boss.originalIndex + 1}</td>
-                                                        <td className="px-2 py-2"><div className="flex items-center gap-1.5"><span className={`text-[8px] px-1 rounded font-mono font-bold ${boss.color === 'purple' ? 'bg-purple-500/20 text-purple-400' : 'bg-red-500/20 text-red-400'}`}>{boss.lv}</span><span className={`font-bold text-xs whitespace-nowrap ${active ? 'text-red-400' : ''}`}>{boss.name}</span></div></td>
-                                                        <td className="px-2 py-2 text-center"><div className="flex items-center justify-center gap-2"><span className={`text-xs font-mono font-bold ${active ? 'text-red-400' : 'text-slate-400'}`}>{formatPredictedTime(boss.nextSpawn)}</span>{boss.isAutoUpdated && <span className="text-[8px] font-bold text-red-500 whitespace-nowrap">自動更新</span>}</div></td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+
+                                {/* Full Boss List Section */}
+                                <div className="mb-10">
+                                    <div className="flex items-center justify-between mb-3 px-1">
+                                        <div className="flex items-center gap-2 text-slate-400 text-[10px] uppercase font-bold"><IconSort size={16} /> 全ボスリスト</div>
+                                        <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+                                            {[{ label: '標準', v: 'DEFAULT' }, { label: 'Lv', v: 'LEVEL' }, { label: '名前', v: 'NAME' }, { label: '出現順', v: 'TIME' }].map(s => (
+                                                <button key={s.v} onClick={() => setMainSortMode(s.v)} className={`px-2 py-1 rounded text-[9px] font-bold transition-colors ${mainSortMode === s.v ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}>{s.label}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-2xl overflow-hidden">
+                                        <table className="w-full text-left border-collapse table-fixed">
+                                            <thead className="bg-slate-950/50 border-b border-slate-800 text-slate-500 text-[9px] font-bold uppercase tracking-wider">
+                                                <tr><th className="px-2 py-2 w-[10%] text-center">No.</th><th className="px-2 py-2 w-[45%]">名前 / Lv</th><th className="px-2 py-2 w-[45%] text-center">予想時間</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                {sortedMainList.map((boss, idx) => {
+                                                    const active = boss.nextSpawn !== 0 && (boss.nextSpawn - now <= 0);
+                                                    return (
+                                                        <tr key={boss.name} onClick={() => setEditingBoss({...boss, view: 'record', tempTime: formatToHHMM(boss.displayLastKill)})} className={`border-b border-slate-800/50 hover:bg-slate-800/30 cursor-pointer transition-colors ${active ? 'bg-red-950/20' : ''}`}>
+                                                            <td className="px-2 py-2 text-[10px] font-mono text-slate-600 text-center">{boss.originalIndex + 1}</td>
+                                                            <td className="px-2 py-2"><div className="flex items-center gap-1.5"><span className={`text-[8px] px-1 rounded font-mono font-bold ${boss.color === 'purple' ? 'bg-purple-500/20 text-purple-400' : 'bg-red-500/20 text-red-400'}`}>{boss.lv}</span><span className={`font-bold text-xs whitespace-nowrap ${active ? 'text-red-400' : ''}`}>{boss.name}</span></div></td>
+                                                            <td className="px-2 py-2 text-center"><div className="flex items-center justify-center gap-2"><span className={`text-xs font-mono font-bold ${active ? 'text-red-400' : 'text-slate-400'}`}>{formatPredictedTime(boss.nextSpawn)}</span>{boss.isAutoUpdated && <span className="text-[8px] font-bold text-red-500 whitespace-nowrap">自動更新</span>}</div></td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         )}
 
                         {activeTab === 'chat' && (
                             <div className="flex flex-col h-[70vh] modal-enter">
-                                <div className="flex-grow bg-slate-900 rounded-xl border border-slate-800 overflow-y-auto p-4 mb-4 space-y-3">
+                                <div className="flex-grow bg-slate-900 rounded-xl border border-slate-800 overflow-y-auto p-4 mb-4 space-y-3 shadow-inner text-xs">
                                     {messages.map(m => (
                                         <div key={m.id} className="flex flex-col group">
                                             <div className="flex items-baseline justify-between mb-1">
@@ -517,7 +534,7 @@
                                                     <button onClick={() => deleteChat(m.id)} className="p-1 text-slate-600 hover:text-red-500"><IconTrash size={12}/></button>
                                                 </div>
                                             </div>
-                                            <div className="bg-slate-800 border border-slate-700 rounded-2xl rounded-tl-none px-3 py-2 text-xs text-slate-200 self-start max-w-[90%] whitespace-pre-wrap break-all shadow-sm">
+                                            <div className={`bg-slate-800 border border-slate-700 rounded-2xl rounded-tl-none px-3 py-2 text-slate-200 self-start max-w-[95%] whitespace-pre-wrap break-all shadow-sm ${m.isPinned ? 'border-red-500/30' : ''}`}>
                                                 {m.text}
                                             </div>
                                         </div>
@@ -525,8 +542,8 @@
                                     <div ref={chatEndRef} />
                                 </div>
                                 <div className="flex gap-2">
-                                    <textarea className="flex-grow bg-slate-900 border-2 border-slate-800 focus:border-red-500 rounded-xl p-3 text-sm outline-none resize-none h-12" placeholder="伝言を入力..." value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }} />
-                                    <button onClick={handleSendChat} className="bg-red-600 hover:bg-red-500 text-white p-3 rounded-xl active:scale-95 flex items-center justify-center transition-all"><IconSend size={20} /></button>
+                                    <textarea className="flex-grow bg-slate-900 border-2 border-slate-800 focus:border-red-500 rounded-xl p-3 text-sm outline-none resize-none h-14" placeholder="メッセージを入力..." value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }} />
+                                    <button onClick={handleSendChat} className="bg-red-600 hover:bg-red-500 text-white p-3 rounded-xl active:scale-95 flex items-center justify-center transition-all"><IconSend size={24} /></button>
                                 </div>
                             </div>
                         )}
@@ -535,20 +552,20 @@
                             <div className="modal-enter">
                                 <div className="flex justify-between items-center mb-6 px-1">
                                     <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">リンク一覧</h2>
-                                    <button onClick={() => setLinkModal({ mode: 'add', name: '', url: '' })} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg text-[10px] font-bold"><IconPlus size={14} /> 追加</button>
+                                    <button onClick={() => setLinkModal({ mode: 'add', name: '', url: '' })} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg text-[10px] font-bold shadow-lg"><IconPlus size={14} /> 追加</button>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     {utilityLinks.map(link => (
-                                        <div key={link.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between group transition-all hover:border-slate-700">
+                                        <div key={link.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between group transition-all hover:border-slate-700 shadow-lg">
                                             <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 flex-grow min-w-0">
-                                                <div className="p-2 bg-slate-800 rounded-lg text-red-500"><IconExternal size={18} /></div>
+                                                <div className="p-2 bg-slate-800 rounded-lg text-red-500"><IconExternal size={20} /></div>
                                                 <div className="flex flex-col min-w-0">
                                                     <span className="font-bold text-sm truncate">{link.name}</span>
-                                                    <span className="text-[9px] text-slate-500 truncate">{link.url}</span>
+                                                    <span className="text-[10px] text-slate-500 truncate">{link.url}</span>
                                                 </div>
                                             </a>
                                             <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => setLinkModal({ mode: 'edit', id: link.id, name: link.name, url: link.url })} className="p-2 text-slate-600 hover:text-white transition-colors"><IconSettings size={16}/></button>
+                                                <button onClick={() => setLinkModal({ mode: 'edit', id: link.id, name: link.name, url: link.url })} className="p-2 text-slate-600 hover:text-white transition-colors"><IconEdit size={16}/></button>
                                                 <button onClick={async () => await db.collection(`artifacts/${appId}/public/data/utility_links`).doc(link.id).delete()} className="p-2 text-slate-600 hover:text-red-500 transition-colors"><IconTrash size={16}/></button>
                                             </div>
                                         </div>
@@ -558,62 +575,78 @@
                         )}
                     </div>
 
-                    {/* Modals */}
+                    {/* Modals & Popups */}
                     {editingBoss && (
                         <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 bg-black/80 backdrop-blur-sm pt-12 modal-enter">
-                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[340px] overflow-hidden shadow-2xl relative max-h-[85vh] flex flex-col">
-                                {editingBoss.view === 'record' ? (
-                                    <div className="flex flex-col overflow-hidden">
-                                        <div className="p-4 border-b border-slate-800 bg-slate-950/50">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <div className="flex items-center gap-1.5"><span className="text-red-500 font-mono font-bold text-xs">Lv.{editingBoss.lv}</span><h3 className="font-bold text-white text-lg">{editingBoss.name}</h3></div>
-                                                <button onClick={() => setEditingBoss(p => ({ ...p, view: 'history' }))} className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-colors"><IconHistory size={20} /></button>
-                                            </div>
-                                            <div className="text-xs text-slate-400 flex items-center gap-1 mb-3"><IconMap size={12} color="#94a3b8" /> {editingBoss.area}</div>
-                                            <div className="flex justify-between items-center">
-                                                <div className="text-[10px] text-orange-500 font-bold bg-orange-500/10 px-2 py-1 rounded border border-orange-500/20">{editingBoss.type === 'interval' ? `周期: ${editingBoss.currentCycle}h` : '定時ボス'}</div>
-                                                {formatCountdown((editingBoss.eventTime || editingBoss.nextSpawn) - now)}
-                                            </div>
-                                        </div>
-                                        <div className="p-4 overflow-y-auto scrollbar-hide">
-                                            {editingBoss.type === 'interval' ? (
-                                                <div className="mb-4">
-                                                    <input type="text" className="bg-slate-950 border-2 border-slate-700 focus:border-red-500 rounded-xl text-xl font-mono text-center w-full py-2 text-slate-100 outline-none" value={editingBoss.tempTime} placeholder="00:00" onChange={(e) => handleSafeTimeInput(e.target.value, (v) => setEditingBoss(prev => ({ ...prev, tempTime: v })))} onKeyDown={(e) => e.key === 'Enter' && handleSaveRecord()} />
-                                                    <div className="grid grid-cols-2 gap-2 mt-4"><button onClick={() => setEditingBoss(p => ({ ...p, tempTime: formatToHHMM(Date.now()) }))} className="bg-slate-800 text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all">現在時刻</button><button onClick={handleSaveRecord} className="bg-red-600 text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all">保存</button></div>
-                                                </div>
-                                            ) : (
-                                                <div className="mb-4 p-3 bg-slate-950/50 rounded-xl border border-slate-800 text-center"><div className="text-[10px] text-slate-500 font-bold uppercase mb-1 tracking-widest">出現予定</div><div className="text-xs text-slate-400 font-mono">{editingBoss.type === 'weekly' ? editingBoss.currentWeeklySchedule.map(s => `${DAYS[s.day]} ${s.time}`).join(', ') : editingBoss.currentDailyTimes.join(', ')}</div></div>
-                                            )}
-                                            <button onClick={() => setEditingBoss(null)} className="w-full bg-[#1e293b] text-white font-bold py-3 rounded-xl text-sm border border-slate-700/50 transition-all">閉じる</button>
-                                        </div>
+                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[340px] overflow-hidden shadow-2xl relative max-h-[85vh] flex flex-col text-xs">
+                                <div className="p-4 border-b border-slate-800 bg-slate-950/50">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <div className="flex items-center gap-1.5"><span className="text-red-500 font-mono font-bold text-xs">Lv.{editingBoss.lv}</span><h3 className="font-bold text-white text-lg">{editingBoss.name}</h3></div>
+                                        <button onClick={() => setEditingBoss(p => ({ ...p, view: 'history' }))} className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-colors"><IconHistory size={20} /></button>
                                     </div>
-                                ) : editingBoss.view === 'history' ? (
-                                    <div className="flex flex-col h-full"><div className="p-4 border-b border-slate-800 flex items-center gap-2"><IconHistory size={18}/><h3 className="font-bold text-sm">履歴: {editingBoss.name}</h3></div><div className="p-4 overflow-y-auto scrollbar-hide flex-grow space-y-2 mb-4">{editingBoss.historyLog?.map((log, i) => (<div key={i} className="flex justify-between items-center bg-slate-950 p-2 rounded-lg border border-slate-800"><div className="flex flex-col"><span className="text-[9px] text-slate-500">{log.isMaint ? 'メンテ' : '討伐'}</span><span className="text-sm font-mono font-bold text-orange-400">{formatToMDHM(log.timestamp + (log.isMaint ? editingBoss.currentCycle*3600000 : 0))}</span></div><button onClick={async () => { const nl = [...editingBoss.historyLog]; nl.splice(i,1); await db.collection(`artifacts/${appId}/public/data/boss_status`).doc(editingBoss.name).update({historyLog: nl}); setEditingBoss(p => ({...p, historyLog: nl})); }} className="p-2 text-slate-700 hover:text-red-500"><IconTrash size={14}/></button></div>))}<button onClick={() => setEditingBoss(p => ({ ...p, view: 'record' }))} className="w-full bg-slate-800 py-3 rounded-xl text-xs font-bold transition-all">戻る</button></div></div>
-                                ) : null}
+                                    <div className="text-xs text-slate-400 flex items-center gap-1 mb-3"><IconMap size={12} color="#94a3b8" /> {editingBoss.area}</div>
+                                    <div className="flex justify-between items-center">
+                                        <div className="text-[10px] text-orange-500 font-bold bg-orange-500/10 px-2 py-1 rounded border border-orange-500/20" onClick={() => setEditingBoss(p => ({ ...p, view: 'settings', tempInterval: p.currentCycle }))}>
+                                            {editingBoss.type === 'interval' ? `周期: ${editingBoss.currentCycle}h` : '定時ボス'} <IconSettings size={10} />
+                                        </div>
+                                        {formatCountdown((editingBoss.eventTime || editingBoss.nextSpawn) - now)}
+                                    </div>
+                                </div>
+                                <div className="p-4">
+                                    {editingBoss.view === 'record' ? (
+                                        <>
+                                            <div className="mb-4">
+                                                <input type="text" className="bg-slate-950 border-2 border-slate-700 focus:border-red-500 rounded-xl text-xl font-mono text-center w-full py-2 text-slate-100 outline-none" value={editingBoss.tempTime} placeholder="00:00" onChange={(e) => handleSafeTimeInput(e.target.value, (v) => setEditingBoss(prev => ({ ...prev, tempTime: v })))} onKeyDown={(e) => { if(e.key === 'Enter') handleSaveRecord(); }} />
+                                                <div className="grid grid-cols-2 gap-2 mt-4"><button onClick={() => setEditingBoss(p => ({ ...p, tempTime: formatToHHMM(Date.now()) }))} className="bg-slate-800 text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all">現在時刻</button><button onClick={handleSaveRecord} className="bg-red-600 text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all">保存</button></div>
+                                            </div>
+                                            <button onClick={() => setEditingBoss(null)} className="w-full bg-[#1e293b] text-white font-bold py-3 rounded-xl text-sm mt-2">閉じる</button>
+                                        </>
+                                    ) : editingBoss.view === 'settings' ? (
+                                        <div className="flex flex-col gap-4">
+                                            <div className="mb-2"><label className="text-[10px] text-slate-500 font-bold mb-1 block uppercase">出現周期 (時間)</label><input type="number" step="0.5" className="bg-slate-950 border-2 border-slate-800 focus:border-orange-500 rounded-xl text-xl font-mono text-center w-full py-2 text-orange-400 outline-none" value={editingBoss.tempInterval} onChange={(e) => setEditingBoss(p => ({...p, tempInterval: e.target.value}))}/></div>
+                                            <div className="grid grid-cols-2 gap-2"><button onClick={() => setEditingBoss(p => ({ ...p, view: 'record' }))} className="bg-slate-800 py-3 rounded-xl text-xs font-bold">戻る</button><button onClick={async () => {
+                                                const updateObj = {};
+                                                if (editingBoss.type === 'interval') {
+                                                    const val = parseFloat(editingBoss.tempInterval);
+                                                    if (!isNaN(val)) updateObj.customInterval = val;
+                                                }
+                                                await db.collection(`artifacts/${appId}/public/data/boss_status`).doc(editingBoss.name).set(updateObj, { merge: true });
+                                                setEditingBoss(p => ({ ...p, view: 'record' }));
+                                            }} className="bg-orange-600 py-3 rounded-xl text-xs font-bold">保存</button></div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col h-[300px] overflow-hidden">
+                                            <div className="overflow-y-auto scrollbar-hide flex-grow space-y-2 mb-4">
+                                                {editingBoss.historyLog?.map((log, i) => (<div key={i} className="flex justify-between items-center bg-slate-950 p-2 rounded-lg border border-slate-800"><div className="flex flex-col"><span className="text-[9px] text-slate-500">{log.isMaint ? 'メンテ' : '討伐'}</span><span className="text-sm font-mono font-bold text-orange-400">{formatToMDHM(log.timestamp + (log.isMaint ? editingBoss.currentCycle*3600000 : 0))}</span></div><button onClick={async () => { const nl = [...editingBoss.historyLog]; nl.splice(i,1); await db.collection(`artifacts/${appId}/public/data/boss_status`).doc(editingBoss.name).update({historyLog: nl}); setEditingBoss(p => ({...p, historyLog: nl})); }} className="p-2 text-slate-700 hover:text-red-500"><IconTrash size={14}/></button></div>))}
+                                            </div>
+                                            <button onClick={() => setEditingBoss(p => ({ ...p, view: 'record' }))} className="w-full bg-slate-800 py-3 rounded-xl text-xs font-bold">戻る</button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
 
                     {linkModal && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md modal-enter">
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md modal-enter text-xs">
                             <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[340px] p-6 shadow-2xl">
                                 <h3 className="text-lg font-bold mb-6">{linkModal.mode === 'add' ? 'リンク追加' : 'リンク編集'}</h3>
                                 <div className="space-y-4 mb-8">
-                                    <input type="text" className="bg-slate-950 border border-slate-800 rounded-xl w-full p-3 text-sm" value={linkModal.name} onChange={(e) => setLinkModal({...linkModal, name: e.target.value})} placeholder="リンク名" />
-                                    <input type="text" className="bg-slate-950 border border-slate-800 rounded-xl w-full p-3 text-sm" value={linkModal.url} onChange={(e) => setLinkModal({...linkModal, url: e.target.value})} placeholder="URL (https://...)" />
+                                    <input type="text" className="bg-slate-950 border border-slate-800 rounded-xl w-full p-3 text-sm outline-none focus:border-red-500" value={linkModal.name} onChange={(e) => setLinkModal({...linkModal, name: e.target.value})} placeholder="リンク名" />
+                                    <input type="text" className="bg-slate-950 border border-slate-800 rounded-xl w-full p-3 text-sm outline-none focus:border-red-500" value={linkModal.url} onChange={(e) => setLinkModal({...linkModal, url: e.target.value})} placeholder="URL (https://...)" />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3"><button onClick={() => setLinkModal(null)} className="bg-slate-800 py-3 rounded-xl text-xs font-bold">キャンセル</button><button onClick={handleSaveLink} className="bg-red-600 py-3 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-lg">保存</button></div>
+                                <div className="grid grid-cols-2 gap-3"><button onClick={() => setLinkModal(null)} className="bg-slate-800 py-3 rounded-xl text-xs font-bold">キャンセル</button><button onClick={handleSaveLink} className="bg-red-600 py-3 rounded-xl text-xs font-bold active:scale-95 shadow-lg">保存</button></div>
                             </div>
                         </div>
                     )}
 
                     {isMaintResetOpen && (
                         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md modal-enter">
-                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[340px] p-6 shadow-2xl">
-                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-orange-500"><IconTool size={20} /> メンテ一括リセット</h3>
+                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[340px] p-6 shadow-2xl text-center">
+                                <h3 className="text-lg font-bold mb-4 flex items-center justify-center gap-2 text-orange-500"><IconTool size={20} /> メンテ一括リセット</h3>
                                 <p className="text-[10px] text-slate-400 mb-6 leading-relaxed">指定した終了時刻にピッタリ全てのボスが出現するように設定します。</p>
                                 <input type="text" className="bg-slate-950 border-2 border-slate-700 focus:border-orange-500 rounded-xl text-3xl font-mono text-center w-full py-3 text-orange-400 outline-none mb-6" value={maintInput} placeholder="14:00" onChange={(e) => handleSafeTimeInput(e.target.value, setMaintTime)} />
-                                <div className="grid grid-cols-2 gap-3"><button onClick={() => setIsMaintResetOpen(false)} className="bg-slate-800 py-3 rounded-xl text-xs font-bold border border-slate-700/50">閉じる</button><button onClick={handleMaintReset} className="bg-orange-600 py-3 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-lg">リセット実行</button></div>
+                                <div className="grid grid-cols-2 gap-3"><button onClick={() => setIsMaintResetOpen(false)} className="bg-slate-800 py-3 rounded-xl text-xs font-bold border border-slate-700/50">閉じる</button><button onClick={handleMaintReset} className="bg-orange-600 py-3 rounded-xl text-xs font-bold active:scale-95 shadow-lg shadow-orange-900/20">リセット実行</button></div>
                             </div>
                         </div>
                     )}
