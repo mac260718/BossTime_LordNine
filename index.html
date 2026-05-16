@@ -248,24 +248,18 @@
                         await auth.signInAnonymously();
                         setIsOnline(true);
                         
-                        // Boss Status Sync
                         db.collection(`artifacts/${appId}/public/data/boss_status`).onSnapshot(snapshot => {
                             const data = {};
                             snapshot.forEach(doc => { data[doc.id] = doc.data(); });
                             setHistory(prev => ({ ...prev, ...data }));
                         });
 
-                        // Links Sync
                         db.collection(`artifacts/${appId}/public/data/utility_links`).onSnapshot(snapshot => {
                             const data = [];
                             snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
-                            if (data.length === 0) {
-                                db.collection(`artifacts/${appId}/public/data/utility_links`).add({ name: "レベル早見表", url: "https://mac260718.github.io/level-lordnine/", order: 0 });
-                            }
                             setUtilityLinks(data.sort((a, b) => (a.order || 0) - (b.order || 0)));
                         });
 
-                        // Chat Sync
                         db.collection(`artifacts/${appId}/public/data/chat_messages`).onSnapshot(snapshot => {
                             const data = [];
                             snapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
@@ -281,7 +275,6 @@
 
             useEffect(() => { if (activeTab === 'chat') chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, activeTab]);
 
-            // Filtered pinned messages for the persistent memo area
             const pinnedMessages = useMemo(() => messages.filter(m => m.isPinned).sort((a, b) => b.timestamp - a.timestamp).slice(0, 10), [messages]);
 
             const processedBosses = useMemo(() => {
@@ -317,10 +310,7 @@
                 const events = [];
                 processedBosses.forEach(boss => {
                     if (boss.nextSpawn === 0) return;
-                    
-                    // Filter Logic: ALL or 60-100
                     if (topLvFilter === '60-100' && !(boss.lv >= 60 && boss.lv <= 100)) return;
-
                     if (boss.nextSpawn > now - GRACE_PERIOD) events.push({ ...boss, eventTime: boss.nextSpawn });
                     if (boss.type === 'interval') {
                         const intervalMs = boss.currentCycle * 3600 * 1000;
@@ -346,7 +336,6 @@
                 }
             }, [processedBosses, mainSortMode]);
 
-            // Database Actions
             const handleSaveRecord = async () => {
                 if (!editingBoss) return;
                 const ts = parseTimeInputToTimestamp(editingBoss.tempTime);
@@ -416,7 +405,14 @@
                                 <h1 className="text-xl font-bold text-red-500 flex items-center gap-2"><IconClock size={24} /> LORD NINE</h1>
                                 <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500 animate-pulse'}`}></div>
                             </div>
-                            <div className="text-xl font-mono font-bold text-slate-100">{new Date(now).getHours()}:{new Date(now).getMinutes().toString().padStart(2, '0')}</div>
+                            <div className="text-right">
+                                {/* Clock with SECONDS added */}
+                                <div className="text-xl font-mono font-bold text-slate-100">
+                                    {new Date(now).getHours().toString().padStart(2, '0')}:
+                                    {new Date(now).getMinutes().toString().padStart(2, '0')}:
+                                    {new Date(now).getSeconds().toString().padStart(2, '0')}
+                                </div>
+                            </div>
                         </div>
                         
                         <div className="max-w-6xl mx-auto flex">
@@ -429,7 +425,7 @@
                             ))}
                         </div>
 
-                        {/* Pinned Messages Area - MATCHED FONT SIZE */}
+                        {/* Pinned Messages Area */}
                         {pinnedMessages.length > 0 && (
                             <div className="max-w-6xl mx-auto bg-red-950/20 border-b border-red-500/20 px-4 py-2">
                                 <div className="flex items-center gap-2 mb-1">
@@ -439,7 +435,6 @@
                                 <div className="max-h-[100px] overflow-y-auto scrollbar-hide space-y-1.5">
                                     {pinnedMessages.map(m => (
                                         <div key={m.id} className="flex justify-between items-start gap-3 bg-slate-900/60 p-2 rounded-lg border border-red-500/10 group shadow-sm">
-                                            {/* text-[13px] to match general UI text */}
                                             <div className="text-[13px] text-slate-200 leading-normal flex-grow whitespace-pre-wrap">{m.text}</div>
                                             <button onClick={() => togglePinChat(m.id, true)} className="text-red-500 opacity-60 hover:opacity-100 transition-opacity pt-0.5"><IconPin size={14} filled /></button>
                                         </div>
@@ -458,7 +453,7 @@
                                     </button>
                                 </div>
                                 
-                                {/* REINSTATED: Level Filter Section */}
+                                {/* Level Filter Section */}
                                 <div className="mb-6">
                                     <div className="flex items-center justify-between mb-3 px-1">
                                         <div className="flex items-center gap-2 text-slate-400 font-bold uppercase text-[10px]"><IconClock size={16} /> 直近 10体</div>
@@ -506,7 +501,7 @@
                                                     const active = boss.nextSpawn !== 0 && (boss.nextSpawn - now <= 0);
                                                     return (
                                                         <tr key={boss.name} onClick={() => setEditingBoss({...boss, view: 'record', tempTime: formatToHHMM(boss.displayLastKill)})} className={`border-b border-slate-800/50 hover:bg-slate-800/30 cursor-pointer transition-colors ${active ? 'bg-red-950/20' : ''}`}>
-                                                            <td className="px-2 py-2 text-[10px] font-mono text-slate-600 text-center">{boss.originalIndex + 1}</td>
+                                                            <td className="px-2 py-2 text-[10px] font-mono text-slate-600 text-center">{mainSortMode === 'DEFAULT' ? boss.originalIndex + 1 : idx + 1}</td>
                                                             <td className="px-2 py-2"><div className="flex items-center gap-1.5"><span className={`text-[8px] px-1 rounded font-mono font-bold ${boss.color === 'purple' ? 'bg-purple-500/20 text-purple-400' : 'bg-red-500/20 text-red-400'}`}>{boss.lv}</span><span className={`font-bold text-xs whitespace-nowrap ${active ? 'text-red-400' : ''}`}>{boss.name}</span></div></td>
                                                             <td className="px-2 py-2 text-center"><div className="flex items-center justify-center gap-2"><span className={`text-xs font-mono font-bold ${active ? 'text-red-400' : 'text-slate-400'}`}>{formatPredictedTime(boss.nextSpawn)}</span>{boss.isAutoUpdated && <span className="text-[8px] font-bold text-red-500 whitespace-nowrap">自動更新</span>}</div></td>
                                                         </tr>
