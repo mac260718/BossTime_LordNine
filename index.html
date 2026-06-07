@@ -50,9 +50,10 @@
         const SENDER_NAME_KEY = "L9_BOSS_SENDER_NAME";
         const ANON_STATE_KEY = "L9_BOSS_ANON_STATE";
         const NOTIFY_ENABLED_KEY = "L9_BOSS_NOTIFY_ENABLED";
+        const NOTIFY_LEAD_MINUTES_KEY = "L9_BOSS_NOTIFY_LEAD_MINUTES";
         const NOTIFIED_EVENTS_KEY = "L9_BOSS_NOTIFIED_EVENTS";
         const GRACE_PERIOD = 10 * 60 * 1000; 
-        const NOTIFY_LEAD_MS = 3 * 60 * 1000;
+        const DEFAULT_NOTIFY_LEAD_MINUTES = 5;
         const TOAST_DURATION = 3200;
 
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
@@ -309,6 +310,14 @@
 
         const readNotificationEnabled = () => localStorage.getItem(NOTIFY_ENABLED_KEY) === "true";
 
+        const normalizeNotifyLeadMinutes = (value) => {
+            const minutes = parseInt(value, 10);
+            if (!Number.isFinite(minutes)) return DEFAULT_NOTIFY_LEAD_MINUTES;
+            return Math.min(120, Math.max(1, minutes));
+        };
+
+        const readNotifyLeadMinutes = () => normalizeNotifyLeadMinutes(localStorage.getItem(NOTIFY_LEAD_MINUTES_KEY));
+
         const isNotificationSupported = () => typeof window !== 'undefined' && "Notification" in window;
 
         const registerServiceWorker = async () => {
@@ -491,6 +500,7 @@
             const [maintInput, setMaintTime] = useState("");
             const [toast, setToast] = useState(null);
             const [notificationsEnabled, setNotificationsEnabled] = useState(readNotificationEnabled);
+            const [notifyLeadMinutes, setNotifyLeadMinutes] = useState(readNotifyLeadMinutes);
             const [notificationPermission, setNotificationPermission] = useState(() => isNotificationSupported() ? Notification.permission : "unsupported");
             const [isAnonymous, setIsAnonymous] = useState(() => localStorage.getItem(ANON_STATE_KEY) === 'true');
             const toastTimerRef = useRef(null);
@@ -515,11 +525,17 @@
                 });
             };
 
+            const handleNotifyLeadChange = (rawValue) => {
+                const minutes = normalizeNotifyLeadMinutes(rawValue);
+                localStorage.setItem(NOTIFY_LEAD_MINUTES_KEY, String(minutes));
+                setNotifyLeadMinutes(minutes);
+            };
+
             const handleToggleNotifications = async () => {
                 if (notificationsEnabled) {
                     localStorage.setItem(NOTIFY_ENABLED_KEY, "false");
                     setNotificationsEnabled(false);
-                    showToast("3分前通知をオフにしました。", "info");
+                    showToast(`${notifyLeadMinutes}分前通知をオフにしました。`, "info");
                     return;
                 }
 
@@ -538,7 +554,7 @@
                 if (permission === "granted") {
                     localStorage.setItem(NOTIFY_ENABLED_KEY, "true");
                     setNotificationsEnabled(true);
-                    showToast("直近10体の3分前通知をオンにしました。", "success");
+                    showToast(`直近10体の${notifyLeadMinutes}分前通知をオンにしました。`, "success");
                 } else {
                     localStorage.setItem(NOTIFY_ENABLED_KEY, "false");
                     setNotificationsEnabled(false);
@@ -703,6 +719,7 @@
 
             useEffect(() => {
                 if (!notificationsEnabled || notificationPermission !== "granted") return;
+                const notifyLeadMs = notifyLeadMinutes * 60 * 1000;
                 const staleCutoff = now - (24 * 60 * 60 * 1000);
                 const currentEvents = new Set(top10SoonEvents.map(event => `${event.name}:${event.eventTime}`));
                 notifiedEventsRef.current.forEach(id => {
@@ -715,7 +732,7 @@
                 top10SoonEvents.forEach(event => {
                     const diff = event.eventTime - now;
                     const eventId = `${event.name}:${event.eventTime}`;
-                    if (diff > 0 && diff <= NOTIFY_LEAD_MS && !notifiedEventsRef.current.has(eventId)) {
+                    if (diff > 0 && diff <= notifyLeadMs && !notifiedEventsRef.current.has(eventId)) {
                         notifiedEventsRef.current.add(eventId);
                         persistNotifiedEvents(notifiedEventsRef.current);
                         showBossNotification(event).then(sent => {
@@ -732,7 +749,7 @@
                     const eventTime = Number(id.split(':').pop());
                     return currentEvents.has(id) || (Number.isFinite(eventTime) && eventTime >= staleCutoff);
                 })));
-            }, [top10SoonEvents, now, notificationsEnabled, notificationPermission]);
+            }, [top10SoonEvents, now, notificationsEnabled, notificationPermission, notifyLeadMinutes]);
 
             const handleSaveRecord = async () => {
                 if (!editingBoss) return;
@@ -974,21 +991,38 @@
                     <div className="max-w-6xl mx-auto">
                         
                         {/* Header */}
-                        <div className="flex justify-between items-center mb-6 sticky top-0 bg-slate-950/95 py-2 z-30 shadow-md">
-                            <div className="flex items-center gap-2">
-                                <h1 className="text-xl font-bold text-red-500 flex items-center gap-2">
-                                    <IconClock size={24} /> LORD NINE
-                                </h1>
-                                <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500 animate-pulse'}`} title={isOnline ? 'オンライン同期中' : 'オフライン / 同期待機'} aria-label={isOnline ? 'オンライン同期中' : 'オフライン / 同期待機'}></div>
-                                <button onClick={handleToggleNotifications} className={`p-1.5 ml-1 rounded-lg transition-colors border flex items-center gap-1 ${notificationsEnabled && notificationPermission === 'granted' ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border-slate-700/50'}`} title={notificationsEnabled ? '3分前通知をオフ' : '3分前通知をオン'} aria-label={notificationsEnabled ? '3分前通知をオフ' : '3分前通知をオン'}>
-                                    {notificationsEnabled && notificationPermission === 'granted' ? <IconBell size={18} /> : <IconBellOff size={18} />}
-                                    {notificationsEnabled && notificationPermission === 'granted' && <span className="hidden sm:inline text-[10px] font-bold">3分前</span>}
-                                </button>
-                                <button onClick={() => setIsMaintResetOpen(true)} className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors border border-slate-700/50" title="メンテリセット"><IconTool size={18} /></button>
-                            </div>
-                            <div className="flex flex-col items-end">
-                                <div className="text-2xl md:text-3xl font-mono font-bold text-slate-100 leading-none">
-                                    {new Date(now).getHours()}:{new Date(now).getMinutes().toString().padStart(2, '0')}
+                        <div className="mb-6 sticky top-0 bg-slate-950/95 py-2 z-30 shadow-md">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <h1 className="text-lg md:text-xl font-bold text-red-500 flex items-center gap-2 whitespace-nowrap">
+                                            <IconClock size={22} /> LORD NINE
+                                        </h1>
+                                        <div className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500 animate-pulse'}`} title={isOnline ? 'オンライン同期中' : 'オフライン / 同期待機'} aria-label={isOnline ? 'オンライン同期中' : 'オフライン / 同期待機'}></div>
+                                    </div>
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <button onClick={handleToggleNotifications} className={`h-9 w-9 rounded-lg transition-colors border flex items-center justify-center ${notificationsEnabled && notificationPermission === 'granted' ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border-slate-700/50'}`} title={notificationsEnabled ? `${notifyLeadMinutes}分前通知をオフ` : `${notifyLeadMinutes}分前通知をオン`} aria-label={notificationsEnabled ? `${notifyLeadMinutes}分前通知をオフ` : `${notifyLeadMinutes}分前通知をオン`}>
+                                            {notificationsEnabled && notificationPermission === 'granted' ? <IconBell size={18} /> : <IconBellOff size={18} />}
+                                        </button>
+                                        <button onClick={() => setIsMaintResetOpen(true)} className="h-9 w-9 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors border border-slate-700/50" title="メンテリセット" aria-label="メンテリセット"><IconTool size={18} /></button>
+                                        <label className="h-9 flex items-center gap-1 rounded-lg bg-slate-900/80 border border-slate-800 px-2 text-[10px] font-bold text-slate-400">
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="120"
+                                                inputMode="numeric"
+                                                className="w-8 bg-transparent text-center font-mono text-emerald-300 outline-none"
+                                                value={notifyLeadMinutes}
+                                                onChange={(e) => handleNotifyLeadChange(e.target.value)}
+                                                aria-label="通知する分数"
+                                            />
+                                            分前
+                                        </label>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-end shrink-0 pt-0.5">
+                                <div className="text-[22px] md:text-3xl font-mono font-bold text-slate-100 leading-none tabular-nums">
+                                    {new Date(now).getHours().toString().padStart(2, '0')}:{new Date(now).getMinutes().toString().padStart(2, '0')}:{new Date(now).getSeconds().toString().padStart(2, '0')}
                                 </div>
                                 {globalMostRecent && (
                                     <div className="mt-1 flex items-center gap-1.5 bg-slate-900/50 px-2 py-0.5 rounded border border-slate-800/50">
@@ -998,6 +1032,7 @@
                                         </span>
                                     </div>
                                 )}
+                                </div>
                             </div>
                         </div>
 
