@@ -329,19 +329,21 @@
                 if (!isPlainObject(boss)) return null;
                 const name = clampText(boss.name, 40);
                 const lv = parseInt(boss.lv, 10);
-                const type = boss.type === "daily" ? "daily" : "interval";
+                const type = boss.type === "weekly" ? "weekly" : (boss.type === "daily" ? "daily" : "interval");
                 const value = parseFloat(boss.value);
                 const dailyTimes = validateDailyTimes(boss.times);
+                const weeklySchedule = validateWeeklySchedule(boss.schedule);
                 if (!name || seen.has(name) || !Number.isFinite(lv) || lv <= 0) return null;
                 if (type === "interval" && (!Number.isFinite(value) || value <= 0)) return null;
                 if (type === "daily" && !dailyTimes.valid) return null;
+                if (type === "weekly" && !weeklySchedule.valid) return null;
                 seen.add(name);
                 return {
                     id: clampText(boss.id, 80) || `custom_${index}`,
                     lv,
                     name,
                     type,
-                    ...(type === "interval" ? { value } : { times: dailyTimes.value }),
+                    ...(type === "interval" ? { value } : (type === "weekly" ? { schedule: weeklySchedule.value } : { times: dailyTimes.value })),
                     bigArea: clampText(boss.bigArea, 80) || "カスタム",
                     area: clampText(boss.area, 80) || "未設定",
                     color: boss.color === "purple" ? "purple" : "red"
@@ -1120,6 +1122,17 @@
                 }
             };
 
+            const getBossModalWeeklySchedule = (modal) => {
+                if (Array.isArray(modal?.weeklySchedule) && modal.weeklySchedule.length) {
+                    return modal.weeklySchedule;
+                }
+                const parsed = parseDailyTimesInput(modal?.times || "");
+                const selectedDay = parseInt(modal?.weeklyDay, 10);
+                const day = Number.isInteger(selectedDay) && selectedDay >= 0 && selectedDay <= 6 ? selectedDay : 0;
+                const times = parsed.length ? parsed : ["12:00"];
+                return times.map(time => ({ day, time }));
+            };
+
             const handleSaveCustomBoss = async () => {
                 if (!bossModal) return;
                 const name = clampText(bossModal.name, 40);
@@ -1127,8 +1140,11 @@
                 const area = clampText(bossModal.area, 80) || "未設定";
                 const lv = parseInt(bossModal.lv, 10);
                 const spawnType = bossModal.spawnType === "daily" ? "daily" : "interval";
+                const scheduleMode = bossModal.scheduleMode === "weekly" ? "weekly" : "daily";
                 const value = parseFloat(bossModal.value);
-                const dailyTimes = validateDailyTimes(parseDailyTimesInput(bossModal.times));
+                const parsedTimes = parseDailyTimesInput(bossModal.times);
+                const dailyTimes = validateDailyTimes(parsedTimes);
+                const weeklySchedule = validateWeeklySchedule(getBossModalWeeklySchedule(bossModal));
 
                 if (!name) {
                     showToast("ボス名を入力してください。", "error");
@@ -1146,8 +1162,12 @@
                     showToast("出現周期は0より大きい数字で入力してください。", "error");
                     return;
                 }
-                if (spawnType === "daily" && !dailyTimes.valid) {
+                if (spawnType === "daily" && scheduleMode !== "weekly" && !dailyTimes.valid) {
                     showToast(dailyTimes.message, "error");
+                    return;
+                }
+                if (spawnType === "daily" && scheduleMode === "weekly" && !weeklySchedule.valid) {
+                    showToast(weeklySchedule.message, "error");
                     return;
                 }
 
@@ -1155,8 +1175,8 @@
                     id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
                     lv,
                     name,
-                    type: spawnType,
-                    ...(spawnType === "interval" ? { value } : { times: dailyTimes.value }),
+                    type: spawnType === "daily" && scheduleMode === "weekly" ? "weekly" : spawnType,
+                    ...(spawnType === "interval" ? { value } : (scheduleMode === "weekly" ? { schedule: weeklySchedule.value } : { times: dailyTimes.value })),
                     bigArea,
                     area,
                     color: "red"
@@ -1614,7 +1634,7 @@
                                     <button onClick={() => setIsBossEditOpen(false)} className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-[10px] font-bold text-slate-300 hover:bg-slate-700 transition-colors">閉じる</button>
                                 </div>
                                 <div className="grid grid-cols-3 gap-2 p-3 border-b border-slate-800 bg-slate-900/70">
-                                    <button onClick={() => setBossModal({ name: "", lv: "", spawnType: "interval", value: "24", times: "12:00", bigArea: "", area: "" })} className="bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1"><IconPlus size={13} />ボス追加</button>
+                                    <button onClick={() => setBossModal({ name: "", lv: "", spawnType: "interval", scheduleMode: "daily", weeklyDay: "0", weeklySchedule: [{ day: 0, time: "12:00" }], value: "24", times: "12:00", bigArea: "", area: "" })} className="bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1"><IconPlus size={13} />ボス追加</button>
                                     <button onClick={openSelectedBossSettings} disabled={!selectedEditBoss} className="bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"><IconSettings size={13} />出現設定</button>
                                     <button onClick={() => selectedEditBoss?.isCustom && handleDeleteCustomBoss(selectedEditBoss)} disabled={!selectedEditBoss?.isCustom} className="bg-red-950/50 hover:bg-red-900/60 border border-red-500/30 text-red-200 font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"><IconTrash size={13} />削除</button>
                                 </div>
@@ -1726,7 +1746,7 @@
 
                     {bossModal && (
                         <div className="fixed inset-0 z-[180] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md modal-enter">
-                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[360px] p-6 shadow-2xl">
+                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[360px] max-h-[92vh] overflow-y-auto scrollbar-hide p-6 shadow-2xl">
                                 <h3 className="text-lg font-bold mb-6 text-white">ボス追加</h3>
                                 <div className="space-y-3 mb-8">
                                     <input
@@ -1744,13 +1764,29 @@
                                             周期
                                         </button>
                                         <button
-                                            onClick={() => setBossModal({ ...bossModal, spawnType: "daily" })}
+                                            onClick={() => setBossModal({ ...bossModal, spawnType: "daily", scheduleMode: bossModal.scheduleMode || "daily", weeklyDay: bossModal.weeklyDay || "0", weeklySchedule: getBossModalWeeklySchedule(bossModal) })}
                                             className={`py-2 rounded-lg text-xs font-bold transition-colors ${bossModal.spawnType === "daily" ? 'bg-orange-600 text-white' : 'text-slate-500 hover:text-slate-200'}`}
                                         >
                                             定時
                                         </button>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    {bossModal.spawnType === "daily" && (
+                                        <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-800 bg-slate-950 p-1">
+                                            <button
+                                                onClick={() => setBossModal({ ...bossModal, scheduleMode: "daily" })}
+                                                className={`py-2 rounded-lg text-xs font-bold transition-colors ${bossModal.scheduleMode !== "weekly" ? 'bg-orange-600 text-white' : 'text-slate-500 hover:text-slate-200'}`}
+                                            >
+                                                毎日
+                                            </button>
+                                            <button
+                                                onClick={() => setBossModal({ ...bossModal, scheduleMode: "weekly", weeklyDay: bossModal.weeklyDay || "0", weeklySchedule: getBossModalWeeklySchedule(bossModal) })}
+                                                className={`py-2 rounded-lg text-xs font-bold transition-colors ${bossModal.scheduleMode === "weekly" ? 'bg-orange-600 text-white' : 'text-slate-500 hover:text-slate-200'}`}
+                                            >
+                                                曜日指定
+                                            </button>
+                                        </div>
+                                    )}
+                                    <div className={`grid gap-3 ${bossModal.spawnType === "daily" && bossModal.scheduleMode === "weekly" ? 'grid-cols-1' : 'grid-cols-2'}`}>
                                         <input
                                             type="number"
                                             inputMode="numeric"
@@ -1760,7 +1796,7 @@
                                             onChange={(e) => setBossModal({ ...bossModal, lv: e.target.value })}
                                             placeholder="Lv"
                                         />
-                                        {bossModal.spawnType === "daily" ? (
+                                        {bossModal.spawnType === "daily" && bossModal.scheduleMode !== "weekly" ? (
                                             <input
                                                 type="text"
                                                 inputMode="numeric"
@@ -1769,7 +1805,7 @@
                                                 onChange={(e) => setBossModal({ ...bossModal, times: e.target.value })}
                                                 placeholder="12:00 18:00"
                                             />
-                                        ) : (
+                                        ) : bossModal.spawnType !== "daily" ? (
                                             <div className="relative">
                                                 <input
                                                     type="number"
@@ -1783,8 +1819,60 @@
                                                 />
                                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-600">h</span>
                                             </div>
-                                        )}
+                                        ) : null}
                                     </div>
+                                    {bossModal.spawnType === "daily" && bossModal.scheduleMode === "weekly" && (() => {
+                                        const schedule = getBossModalWeeklySchedule(bossModal);
+                                        return (
+                                            <div className="space-y-2">
+                                                {schedule.map((slot, i) => (
+                                                    <div key={`new-boss-schedule-${i}`} className="flex gap-1.5 items-center bg-slate-950 p-2 rounded-xl border border-slate-800">
+                                                        <select
+                                                            className="bg-slate-900 text-xs px-2 py-2 rounded-lg border border-slate-700 outline-none flex-1 min-w-0"
+                                                            value={slot.day}
+                                                            onChange={(e) => setBossModal(p => {
+                                                                const nextSchedule = getBossModalWeeklySchedule(p);
+                                                                return { ...p, weeklySchedule: nextSchedule.map((s, idx) => idx === i ? { ...s, day: parseInt(e.target.value, 10) } : s) };
+                                                            })}
+                                                        >
+                                                            {DAYS.map((day, index) => <option key={day} value={index}>{day}曜日</option>)}
+                                                        </select>
+                                                        <input
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            placeholder="00:00"
+                                                            className="bg-slate-900 text-xs px-2 py-2 rounded-lg border border-slate-700 w-24 font-mono outline-none focus:border-orange-500"
+                                                            value={slot.time}
+                                                            onChange={(e) => setBossModal(p => {
+                                                                const nextSchedule = getBossModalWeeklySchedule(p);
+                                                                return { ...p, weeklySchedule: nextSchedule.map((s, idx) => idx === i ? { ...s, time: e.target.value } : s) };
+                                                            })}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            aria-label="スケジュールを削除"
+                                                            title="スケジュールを削除"
+                                                            onClick={() => setBossModal(p => {
+                                                                const nextSchedule = getBossModalWeeklySchedule(p);
+                                                                return { ...p, weeklySchedule: nextSchedule.length <= 1 ? nextSchedule : nextSchedule.filter((_, idx) => idx !== i) };
+                                                            })}
+                                                            disabled={schedule.length <= 1}
+                                                            className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:text-red-400 hover:bg-red-950/30 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-500 transition-colors shrink-0"
+                                                        >
+                                                            <IconTrash size={13} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setBossModal(p => ({ ...p, weeklySchedule: [...getBossModalWeeklySchedule(p), { day: 0, time: "00:00" }] }))}
+                                                    className="w-full py-2.5 border border-dashed border-slate-700 rounded-xl text-[10px] font-bold text-slate-500 hover:bg-slate-800 transition-colors flex items-center justify-center gap-1"
+                                                >
+                                                    <IconPlus size={10} /> スケジュール追加
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
                                     <input
                                         type="text"
                                         className="bg-slate-950 border border-slate-800 rounded-xl w-full p-3 text-sm outline-none focus:border-orange-500"
