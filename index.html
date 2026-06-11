@@ -46,12 +46,14 @@
         const FIRESTORE_COLLECTION_PATH = `artifacts/${appId}/public/data/boss_status`;
         const UTILITY_LINKS_COLLECTION_PATH = `artifacts/${appId}/public/data/utility_links`;
         const CHAT_MESSAGES_COLLECTION_PATH = `artifacts/${appId}/public/data/chat_messages`;
+        const APP_SETTINGS_COLLECTION_PATH = `artifacts/${appId}/public/data/app_settings`;
         const STORAGE_KEY = "L9_BOSS_TIMER_DATA";
         const SENDER_NAME_KEY = "L9_BOSS_SENDER_NAME";
         const ANON_STATE_KEY = "L9_BOSS_ANON_STATE";
         const NOTIFY_ENABLED_KEY = "L9_BOSS_NOTIFY_ENABLED";
         const NOTIFY_LEAD_MINUTES_KEY = "L9_BOSS_NOTIFY_LEAD_MINUTES";
         const NOTIFIED_EVENTS_KEY = "L9_BOSS_NOTIFIED_EVENTS";
+        const CHAT_LAST_SEEN_KEY = "L9_BOSS_CHAT_LAST_SEEN";
         const GRACE_PERIOD = 10 * 60 * 1000; 
         const DEFAULT_NOTIFY_LEAD_MINUTES = 5;
         const TOAST_DURATION = 3200;
@@ -121,6 +123,7 @@
             { lv: 145, name: "ルクス", type: "weekly", schedule: [{ day: 6, time: "23:00" }], bigArea: "ヴォルカンカの心臓", area: "沈黙の溶鉱炉", color: "red" }
         ].map((b, i) => ({ ...b, originalIndex: i }));
         const KNOWN_BOSS_NAMES = new Set(BOSS_DATA_RAW.map(boss => boss.name));
+        const DEFAULT_BOSS_ORDER = BOSS_DATA_RAW.map(boss => boss.name);
 
         const IconClock = ({color="currentColor", size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
         const IconMap = ({size=12, color="#475569"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>;
@@ -136,6 +139,8 @@
         const IconBellOff = ({size=18, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M8.7 3.3A6 6 0 0 1 18 8c0 1.8.2 3.3.6 4.4"/><path d="M17 17H3c0-2 3-2 3-9a6 6 0 0 1 .5-2.4"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></svg>;
         const IconPin = ({size=14, filled=false}) => <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><polygon points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3 12 2"/></svg>;
         const IconSend = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>;
+        const IconChevronUp = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="m18 15-6-6-6 6"/></svg>;
+        const IconChevronDown = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="m6 9 6 6 6-6"/></svg>;
 
         const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -167,6 +172,8 @@
             }
             return { valid: true, value: [...new Set(normalized)] };
         };
+
+        const parseDailyTimesInput = (value) => String(value || '').normalize('NFKC').split(/[,\s、，]+/).map(time => time.trim()).filter(Boolean);
 
         const validateWeeklySchedule = (schedule) => {
             if (!Array.isArray(schedule) || schedule.length === 0) {
@@ -218,9 +225,8 @@
         const sanitizeHistoryMap = (raw) => {
             if (!isPlainObject(raw)) return {};
             return Object.entries(raw).reduce((acc, [bossName, status]) => {
-                if (KNOWN_BOSS_NAMES.has(bossName)) {
-                    acc[bossName] = sanitizeBossStatus(status);
-                }
+                const cleanName = clampText(bossName, 40);
+                if (cleanName) acc[cleanName] = sanitizeBossStatus(status);
                 return acc;
             }, {});
         };
@@ -289,6 +295,60 @@
             };
         };
 
+        const sanitizeBossOrder = (order, fallbackOrder = DEFAULT_BOSS_ORDER) => {
+            const allowedNames = new Set(fallbackOrder);
+            const seen = new Set();
+            const clean = Array.isArray(order) ? order.filter(name => {
+                if (!allowedNames.has(name) || seen.has(name)) return false;
+                seen.add(name);
+                return true;
+            }) : [];
+            fallbackOrder.forEach(name => {
+                if (!seen.has(name)) clean.push(name);
+            });
+            return clean;
+        };
+
+        const sanitizeStoredBossOrder = (order) => {
+            if (!Array.isArray(order)) return DEFAULT_BOSS_ORDER;
+            const seen = new Set();
+            const clean = [];
+            order.forEach(name => {
+                const cleanName = clampText(name, 40);
+                if (!cleanName || seen.has(cleanName)) return;
+                seen.add(cleanName);
+                clean.push(cleanName);
+            });
+            return clean.length ? clean : DEFAULT_BOSS_ORDER;
+        };
+
+        const sanitizeCustomBosses = (bosses) => {
+            if (!Array.isArray(bosses)) return [];
+            const seen = new Set(DEFAULT_BOSS_ORDER);
+            return bosses.map((boss, index) => {
+                if (!isPlainObject(boss)) return null;
+                const name = clampText(boss.name, 40);
+                const lv = parseInt(boss.lv, 10);
+                const type = boss.type === "daily" ? "daily" : "interval";
+                const value = parseFloat(boss.value);
+                const dailyTimes = validateDailyTimes(boss.times);
+                if (!name || seen.has(name) || !Number.isFinite(lv) || lv <= 0) return null;
+                if (type === "interval" && (!Number.isFinite(value) || value <= 0)) return null;
+                if (type === "daily" && !dailyTimes.valid) return null;
+                seen.add(name);
+                return {
+                    id: clampText(boss.id, 80) || `custom_${index}`,
+                    lv,
+                    name,
+                    type,
+                    ...(type === "interval" ? { value } : { times: dailyTimes.value }),
+                    bigArea: clampText(boss.bigArea, 80) || "カスタム",
+                    area: clampText(boss.area, 80) || "未設定",
+                    color: boss.color === "purple" ? "purple" : "red"
+                };
+            }).filter(Boolean);
+        };
+
         const readNotifiedEvents = () => {
             try {
                 const saved = JSON.parse(localStorage.getItem(NOTIFIED_EVENTS_KEY) || "[]");
@@ -298,6 +358,11 @@
                 localStorage.removeItem(NOTIFIED_EVENTS_KEY);
                 return new Set();
             }
+        };
+
+        const readChatLastSeen = () => {
+            const timestamp = Number(localStorage.getItem(CHAT_LAST_SEEN_KEY));
+            return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0;
         };
 
         const persistNotifiedEvents = (events) => {
@@ -490,13 +555,20 @@
             const [history, setHistory] = useState(readSavedHistory);
             const [utilityLinks, setUtilityLinks] = useState([]);
             const [messages, setMessages] = useState([]);
+            const [customBosses, setCustomBosses] = useState([]);
+            const [bossOrder, setBossOrder] = useState(DEFAULT_BOSS_ORDER);
+            const [isBossEditOpen, setIsBossEditOpen] = useState(false);
+            const [selectedEditBossName, setSelectedEditBossName] = useState("");
             const [topLvFilter, setTopLvFilter] = useState('ALL');
             const [mainSortMode, setMainSortMode] = useState('DEFAULT'); 
             const [now, setNow] = useState(Date.now());
             const [isOnline, setIsOnline] = useState(false);
+            const [hasNewChat, setHasNewChat] = useState(false);
+            const [chatFavoriteChecked, setChatFavoriteChecked] = useState(true);
             const [editingBoss, setEditingBoss] = useState(null); 
             const [isMaintResetOpen, setIsMaintResetOpen] = useState(false);
             const [linkModal, setLinkModal] = useState(null);
+            const [bossModal, setBossModal] = useState(null);
             const [maintInput, setMaintTime] = useState("");
             const [toast, setToast] = useState(null);
             const [notificationsEnabled, setNotificationsEnabled] = useState(readNotificationEnabled);
@@ -505,6 +577,8 @@
             const [isAnonymous, setIsAnonymous] = useState(() => localStorage.getItem(ANON_STATE_KEY) === 'true');
             const toastTimerRef = useRef(null);
             const notifiedEventsRef = useRef(readNotifiedEvents());
+            const lastSeenChatTimestampRef = useRef(readChatLastSeen());
+            const isChatSnapshotInitializedRef = useRef(false);
             const senderNameRef = useRef(localStorage.getItem(SENDER_NAME_KEY) || "");
             const chatInputRef = useRef(null);
             const chatEndRef = useRef(null);
@@ -579,9 +653,7 @@
                         unsubscribes.push(db.collection(FIRESTORE_COLLECTION_PATH).onSnapshot(snapshot => {
                             const data = {};
                             snapshot.forEach(doc => {
-                                if (KNOWN_BOSS_NAMES.has(doc.id)) {
-                                    data[doc.id] = sanitizeBossStatus(doc.data());
-                                }
+                                data[doc.id] = sanitizeBossStatus(doc.data());
                             });
                             if (!isMounted) return;
                             setIsOnline(true);
@@ -618,6 +690,22 @@
                             if (!isMounted) return;
                             showToast("掲示板の同期に失敗しました。", "warning");
                         }));
+                        unsubscribes.push(db.collection(APP_SETTINGS_COLLECTION_PATH).doc('boss_order').onSnapshot(doc => {
+                            if (!isMounted) return;
+                            setBossOrder(sanitizeStoredBossOrder(doc.exists ? doc.data()?.order : null));
+                        }, (e) => {
+                            console.warn("Boss order sync failed.", e);
+                            if (!isMounted) return;
+                            showToast("初期順の同期に失敗しました。", "warning");
+                        }));
+                        unsubscribes.push(db.collection(APP_SETTINGS_COLLECTION_PATH).doc('custom_bosses').onSnapshot(doc => {
+                            if (!isMounted) return;
+                            setCustomBosses(sanitizeCustomBosses(doc.exists ? doc.data()?.bosses : []));
+                        }, (e) => {
+                            console.warn("Custom bosses sync failed.", e);
+                            if (!isMounted) return;
+                            showToast("追加ボスの同期に失敗しました。", "warning");
+                        }));
                     } catch (e) {
                         console.warn("Firebase initialization failed.", e);
                         if (!isMounted) return;
@@ -644,8 +732,22 @@
                 }
             }, [messages, activeTab]);
 
+            const allBossData = useMemo(() => {
+                return [
+                    ...BOSS_DATA_RAW,
+                    ...customBosses.map((boss, index) => ({
+                        ...boss,
+                        originalIndex: BOSS_DATA_RAW.length + index,
+                        isCustom: true
+                    }))
+                ];
+            }, [customBosses]);
+
+            const allBossNames = useMemo(() => allBossData.map(boss => boss.name), [allBossData]);
+            const effectiveBossOrder = useMemo(() => sanitizeBossOrder(bossOrder, allBossNames), [bossOrder, allBossNames]);
+
             const processedBosses = useMemo(() => {
-                return BOSS_DATA_RAW.map(boss => {
+                return allBossData.map(boss => {
                     let nextSpawn = 0;
                     let docData = history[boss.name] || {};
                     let displayLastKill = docData.lastKill || 0;
@@ -671,7 +773,21 @@
                     }
                     return { ...boss, nextSpawn, displayLastKill, isAutoUpdated, currentCycle: cycleValue, currentWeeklySchedule: weeklySchedule, currentDailyTimes: dailyTimes, historyLog: docData.historyLog || [] };
                 });
-            }, [history, now]);
+            }, [history, now, allBossData]);
+
+            const selectedEditBoss = useMemo(() => {
+                return processedBosses.find(boss => boss.name === selectedEditBossName)
+                    || processedBosses.find(boss => boss.name === effectiveBossOrder[0])
+                    || null;
+            }, [processedBosses, selectedEditBossName, effectiveBossOrder]);
+            const selectedEditIndex = effectiveBossOrder.indexOf(selectedEditBoss?.name);
+
+            useEffect(() => {
+                if (!isBossEditOpen) return;
+                if (!effectiveBossOrder.includes(selectedEditBossName)) {
+                    setSelectedEditBossName(effectiveBossOrder[0] || "");
+                }
+            }, [isBossEditOpen, effectiveBossOrder, selectedEditBossName]);
 
             const top10SoonEvents = useMemo(() => {
                 const events = [];
@@ -695,6 +811,7 @@
 
             const sortedMainList = useMemo(() => {
                 const list = [...processedBosses];
+                const orderMap = new Map(effectiveBossOrder.map((name, index) => [name, index]));
                 switch (mainSortMode) {
                     case 'LEVEL': return list.sort((a, b) => a.lv - b.lv || a.originalIndex - b.originalIndex);
                     case 'NAME': return list.sort((a, b) => a.name.localeCompare(b.name, 'ja') || a.originalIndex - b.originalIndex);
@@ -704,9 +821,9 @@
                         if (b.nextSpawn === 0) return -1;
                         return a.nextSpawn - b.nextSpawn;
                     });
-                    default: return list.sort((a, b) => a.originalIndex - b.originalIndex);
+                    default: return list.sort((a, b) => (orderMap.get(a.name) ?? a.originalIndex) - (orderMap.get(b.name) ?? b.originalIndex));
                 }
-            }, [processedBosses, mainSortMode]);
+            }, [processedBosses, mainSortMode, effectiveBossOrder]);
 
             const globalMostRecent = useMemo(() => {
                 const soonest = [...top10SoonEvents].filter(e => e.eventTime > now);
@@ -716,6 +833,33 @@
             const pinnedMessages = useMemo(() => {
                 return messages.filter(message => message.isPinned).sort((a, b) => b.timestamp - a.timestamp).slice(0, 10);
             }, [messages]);
+
+            const latestChatTimestamp = useMemo(() => {
+                return messages.reduce((latest, message) => Math.max(latest, Number(message.timestamp) || 0), 0);
+            }, [messages]);
+
+            useEffect(() => {
+                if (!latestChatTimestamp) return;
+                if (!isChatSnapshotInitializedRef.current) {
+                    isChatSnapshotInitializedRef.current = true;
+                    if (!lastSeenChatTimestampRef.current) {
+                        lastSeenChatTimestampRef.current = latestChatTimestamp;
+                        localStorage.setItem(CHAT_LAST_SEEN_KEY, String(latestChatTimestamp));
+                        return;
+                    }
+                }
+
+                if (activeTab === 'chat') {
+                    lastSeenChatTimestampRef.current = latestChatTimestamp;
+                    localStorage.setItem(CHAT_LAST_SEEN_KEY, String(latestChatTimestamp));
+                    setHasNewChat(false);
+                    return;
+                }
+
+                if (latestChatTimestamp > lastSeenChatTimestampRef.current) {
+                    setHasNewChat(true);
+                }
+            }, [latestChatTimestamp, activeTab]);
 
             useEffect(() => {
                 if (!notificationsEnabled || notificationPermission !== "granted") return;
@@ -777,6 +921,7 @@
             const handleSaveSettings = async () => {
                 if (!editingBoss) return;
                 const bossName = editingBoss.name;
+                const shouldReturnToBossEdit = Boolean(editingBoss.returnToBossEdit);
                 const updateObj = {};
                 if (editingBoss.type === 'interval') {
                     const interval = parseFloat(editingBoss.tempInterval);
@@ -811,6 +956,11 @@
                         showToast("設定はローカルに保存しましたが、同期に失敗しました。", "warning");
                     }
                 }
+                if (shouldReturnToBossEdit) {
+                    setEditingBoss(null);
+                    setIsBossEditOpen(true);
+                    return;
+                }
                 setEditingBoss(p => ({
                     ...p,
                     view: 'record',
@@ -833,7 +983,7 @@
                 const batch = db.batch();
                 const updates = {};
                 const recordedAt = Date.now();
-                BOSS_DATA_RAW.forEach(boss => {
+                allBossData.forEach(boss => {
                     if (boss.type === 'interval') {
                         const cycle = history[boss.name]?.customInterval || boss.value;
                         const intervalMs = cycle * 3600 * 1000;
@@ -906,9 +1056,10 @@
                         senderName,
                         timestamp: Date.now(),
                         userId: auth.currentUser?.uid || "anon",
-                        isPinned: false
+                        isPinned: chatFavoriteChecked
                     });
                     if (chatInputRef.current) chatInputRef.current.value = "";
+                    setChatFavoriteChecked(true);
                 } catch (e) {
                     console.warn("Could not send chat message.", e);
                     setIsOnline(false);
@@ -969,16 +1120,175 @@
                 }
             };
 
-            const openEdit = (boss) => {
+            const handleSaveCustomBoss = async () => {
+                if (!bossModal) return;
+                const name = clampText(bossModal.name, 40);
+                const bigArea = clampText(bossModal.bigArea, 80) || "カスタム";
+                const area = clampText(bossModal.area, 80) || "未設定";
+                const lv = parseInt(bossModal.lv, 10);
+                const spawnType = bossModal.spawnType === "daily" ? "daily" : "interval";
+                const value = parseFloat(bossModal.value);
+                const dailyTimes = validateDailyTimes(parseDailyTimesInput(bossModal.times));
+
+                if (!name) {
+                    showToast("ボス名を入力してください。", "error");
+                    return;
+                }
+                if (allBossNames.includes(name)) {
+                    showToast("同じ名前のボスが既にあります。", "error");
+                    return;
+                }
+                if (!Number.isFinite(lv) || lv <= 0) {
+                    showToast("Lvは1以上の数字で入力してください。", "error");
+                    return;
+                }
+                if (spawnType === "interval" && (!Number.isFinite(value) || value <= 0)) {
+                    showToast("出現周期は0より大きい数字で入力してください。", "error");
+                    return;
+                }
+                if (spawnType === "daily" && !dailyTimes.valid) {
+                    showToast(dailyTimes.message, "error");
+                    return;
+                }
+
+                const nextBoss = {
+                    id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                    lv,
+                    name,
+                    type: spawnType,
+                    ...(spawnType === "interval" ? { value } : { times: dailyTimes.value }),
+                    bigArea,
+                    area,
+                    color: "red"
+                };
+                const nextCustomBosses = sanitizeCustomBosses([...customBosses, nextBoss]);
+                const nextNames = [...allBossNames, name];
+                const nextOrder = sanitizeBossOrder([...effectiveBossOrder, name], nextNames);
+                const batch = db.batch();
+                batch.set(db.collection(APP_SETTINGS_COLLECTION_PATH).doc('custom_bosses'), {
+                    bosses: nextCustomBosses,
+                    updatedAt: Date.now()
+                }, { merge: true });
+                batch.set(db.collection(APP_SETTINGS_COLLECTION_PATH).doc('boss_order'), {
+                    order: nextOrder,
+                    updatedAt: Date.now()
+                }, { merge: true });
+
+                try {
+                    await batch.commit();
+                    setCustomBosses(nextCustomBosses);
+                    setBossOrder(nextOrder);
+                    setSelectedEditBossName(name);
+                    setBossModal(null);
+                    showToast("ボスを追加しました。", "success");
+                } catch (e) {
+                    console.warn("Could not save custom boss.", e);
+                    showToast("ボスの追加に失敗しました。", "error");
+                }
+            };
+
+            const handleDeleteCustomBoss = async (targetBoss = editingBoss) => {
+                if (!targetBoss?.isCustom) return;
+                const bossName = targetBoss.name;
+                if (!window.confirm(`「${bossName}」を削除しますか？`)) return;
+
+                const nextCustomBosses = sanitizeCustomBosses(customBosses.filter(boss => boss.name !== bossName));
+                const nextOrder = effectiveBossOrder.filter(name => name !== bossName);
+                const batch = db.batch();
+                batch.set(db.collection(APP_SETTINGS_COLLECTION_PATH).doc('custom_bosses'), {
+                    bosses: nextCustomBosses,
+                    updatedAt: Date.now()
+                }, { merge: true });
+                batch.set(db.collection(APP_SETTINGS_COLLECTION_PATH).doc('boss_order'), {
+                    order: nextOrder,
+                    updatedAt: Date.now()
+                }, { merge: true });
+                batch.delete(db.collection(FIRESTORE_COLLECTION_PATH).doc(bossName));
+
+                try {
+                    await batch.commit();
+                    setCustomBosses(nextCustomBosses);
+                    setBossOrder(nextOrder);
+                    setSelectedEditBossName(prev => prev === bossName ? (nextOrder[0] || "") : prev);
+                    applyLocalHistory(prev => {
+                        const nextHistory = { ...prev };
+                        delete nextHistory[bossName];
+                        return nextHistory;
+                    });
+                    if (editingBoss?.name === bossName) setEditingBoss(null);
+                    showToast("追加ボスを削除しました。", "success");
+                } catch (e) {
+                    console.warn("Could not delete custom boss.", e);
+                    showToast("追加ボスの削除に失敗しました。", "error");
+                }
+            };
+
+            const saveBossOrder = async (nextOrder) => {
+                const cleanOrder = sanitizeBossOrder(nextOrder, allBossNames);
+                setBossOrder(cleanOrder);
+                try {
+                    await db.collection(APP_SETTINGS_COLLECTION_PATH).doc('boss_order').set({
+                        order: cleanOrder,
+                        updatedAt: Date.now()
+                    }, { merge: true });
+                } catch (e) {
+                    console.warn("Could not save boss order.", e);
+                    showToast("初期順の保存に失敗しました。", "warning");
+                }
+            };
+
+            const moveBossOrder = (bossName, direction) => {
+                const currentOrder = [...effectiveBossOrder];
+                const index = currentOrder.indexOf(bossName);
+                const nextIndex = index + direction;
+                if (index < 0 || nextIndex < 0 || nextIndex >= currentOrder.length) return;
+                const nextOrder = [...currentOrder];
+                [nextOrder[index], nextOrder[nextIndex]] = [nextOrder[nextIndex], nextOrder[index]];
+                saveBossOrder(nextOrder);
+            };
+
+            const openBossEditPanel = () => {
+                setSelectedEditBossName(prev => effectiveBossOrder.includes(prev) ? prev : (effectiveBossOrder[0] || ""));
+                setIsBossEditOpen(true);
+            };
+
+            const moveSelectedBossOrder = (direction) => {
+                if (!selectedEditBossName) {
+                    showToast("移動するボスを選択してください。", "warning");
+                    return;
+                }
+                moveBossOrder(selectedEditBossName, direction);
+            };
+
+            const openSelectedBossSettings = () => {
+                if (!selectedEditBoss) {
+                    showToast("設定するボスを選択してください。", "warning");
+                    return;
+                }
+                setIsBossEditOpen(false);
+                openEdit(selectedEditBoss, 'settings', { returnToBossEdit: true });
+            };
+
+            const openEdit = (boss, view = 'record', options = {}) => {
                 setEditingBoss({
                     ...boss, 
-                    view: 'record', 
+                    view, 
+                    returnToBossEdit: Boolean(options.returnToBossEdit),
                     tempTime: formatToHHMM(boss.displayLastKill),
                     tempInterval: boss.currentCycle,
                     tempWeeklySchedule: [...(boss.currentWeeklySchedule || [])],
                     tempDailyTimes: [...(boss.currentDailyTimes || [])],
                     historyLog: boss.historyLog || []
                 });
+            };
+
+            const closeBossSettings = () => {
+                if (editingBoss?.returnToBossEdit) {
+                    setEditingBoss(null);
+                    setIsBossEditOpen(true);
+                    return;
+                }
+                setEditingBoss(p => ({ ...p, view: 'record' }));
             };
 
             return (
@@ -1048,7 +1358,10 @@
                                     className={`py-3 text-xs font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === tab.id ? 'tab-active bg-slate-950/60' : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/40'}`}
                                 >
                                     {tab.icon}
-                                    {tab.label}
+                                    <span className="whitespace-nowrap">{tab.label}</span>
+                                    {tab.id === 'chat' && hasNewChat && activeTab !== 'chat' && (
+                                        <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[9px] font-black leading-none text-white shadow-lg">New</span>
+                                    )}
                                 </button>
                             ))}
                         </div>
@@ -1089,11 +1402,11 @@
                                 </div>
                             </div>
                             <div className="bg-slate-900/60 rounded-xl border border-slate-800 shadow-xl overflow-x-auto">
-                                <table className="w-full text-left border-collapse min-w-[340px] table-fixed">
+                                <table className="w-full text-left border-collapse min-w-[340px] table-auto">
                                     <thead className="bg-slate-950/50 border-b border-slate-800 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
                                         <tr>
-                                            <th className="px-2 py-2 w-[10%] text-center">No.</th>
-                                            <th className="px-2 py-2 w-[35%]">名前 / Lv</th>
+                                            <th className="px-1 py-2 w-px text-center whitespace-nowrap">No.</th>
+                                            <th className="px-2 py-2 w-[44%]">名前 / Lv</th>
                                             <th className="px-2 py-2 w-[25%]">エリア</th>
                                             <th className="px-2 py-2 w-[30%] text-center">予想時間</th>
                                         </tr>
@@ -1103,7 +1416,7 @@
                                             const diff = event.eventTime - now;
                                             return (
                                                 <tr key={`top-${event.name}-${event.eventTime}`} onClick={() => openEdit(event)} className={`border-b border-slate-800/50 cursor-pointer transition-colors ${diff <= 0 ? 'bg-red-950/20' : 'hover:bg-slate-800/40'}`}>
-                                                    <td className="px-2 py-3 text-[11px] font-mono font-bold text-slate-600 text-center">{index + 1}</td>
+                                                    <td className="px-1 py-3 text-[11px] font-mono font-bold text-slate-600 text-center whitespace-nowrap">{index + 1}</td>
                                                     <td className="px-2 py-3">
                                                         <div className="flex items-center gap-1">
                                                             <span className={`text-[10px] font-bold ${event.color === 'purple' ? 'text-purple-400' : 'text-red-400'}`}>Lv.{event.lv}</span>
@@ -1134,45 +1447,54 @@
                                     <IconSort size={16} />
                                     <h2 className="text-xs font-bold uppercase tracking-widest">全ボス一覧</h2>
                                 </div>
-                                <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 overflow-x-auto scrollbar-hide">
-                                    {SORT_OPTIONS.map(option => (
-                                        <button
-                                            key={option.value}
-                                            onClick={() => setMainSortMode(option.value)}
-                                            className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap transition-colors ${mainSortMode === option.value ? 'bg-orange-600 text-white' : 'text-slate-500 hover:text-slate-200'}`}
-                                        >
-                                            {option.label}
-                                        </button>
-                                    ))}
+                                <div className="flex flex-wrap gap-1 justify-end">
+                                    <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 overflow-x-auto scrollbar-hide">
+                                        {SORT_OPTIONS.map(option => (
+                                            <button
+                                                key={option.value}
+                                                onClick={() => setMainSortMode(option.value)}
+                                                className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap transition-colors ${mainSortMode === option.value ? 'bg-orange-600 text-white' : 'text-slate-500 hover:text-slate-200'}`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <button onClick={openBossEditPanel} className="px-2 py-1 rounded-lg border border-orange-500/30 bg-orange-600/15 text-[10px] font-bold text-orange-200 hover:bg-orange-600/25 transition-colors flex items-center gap-1 whitespace-nowrap"><IconEdit size={12} />編集</button>
                                 </div>
                             </div>
                             <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-2xl overflow-hidden">
-                                <table className="w-full text-left border-collapse table-fixed">
+                                <table className="w-full text-left border-collapse table-auto">
                                 <thead className="bg-slate-950/50 border-b border-slate-800 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
                                     <tr>
-                                        <th className="px-2 py-2 w-[10%] text-center">No.</th>
-                                        <th className="px-2 py-2 w-[35%]">名前 / Lv</th>
-                                        <th className="px-2 py-2 w-[25%]">エリア</th>
+                                        <th className="px-1 py-2 w-px text-center whitespace-nowrap">No.</th>
+                                        <th className="px-2 py-2 w-[43%]">名前 / Lv</th>
+                                        <th className="px-2 py-2 w-[26%]">エリア</th>
                                         <th className="px-2 py-2 w-[30%] text-center">予想時間</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {sortedMainList.map((boss, index) => {
                                         const diff = boss.nextSpawn - now;
+                                        const orderIndex = effectiveBossOrder.indexOf(boss.name);
+                                        const displayIndex = mainSortMode === 'DEFAULT' ? (orderIndex >= 0 ? orderIndex + 1 : index + 1) : index + 1;
                                         return (
                                             <tr key={boss.name} onClick={() => openEdit(boss)} className={`border-b border-slate-800/50 hover:bg-slate-800/30 cursor-pointer transition-colors ${boss.nextSpawn !== 0 && diff <= 0 ? 'bg-red-950/20' : ''}`}>
-                                                <td className="px-2 py-2 text-[10px] font-mono text-slate-600 text-center">{mainSortMode === 'DEFAULT' ? boss.originalIndex + 1 : index + 1}</td>
+                                                <td className="px-1 py-2 text-[10px] font-mono text-slate-600 text-center whitespace-nowrap">
+                                                    {displayIndex}
+                                                </td>
                                                 <td className="px-2 py-2">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className={`text-[9px] px-1 rounded font-mono font-bold ${boss.color === 'purple' ? 'bg-purple-500/20 text-purple-400' : 'bg-red-500/20 text-red-400'}`}>{boss.lv}</span>
-                                                        <span className={`font-bold text-xs whitespace-nowrap ${boss.nextSpawn !== 0 && diff <= 0 ? 'text-red-400' : ''}`}>{boss.name}</span>
+                                                    <div className="flex flex-col min-w-0">
+                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                            <span className={`text-[9px] px-1 rounded font-mono font-bold ${boss.color === 'purple' ? 'bg-purple-500/20 text-purple-400' : 'bg-red-500/20 text-red-400'}`}>{boss.lv}</span>
+                                                            <span className={`font-bold text-xs truncate ${boss.nextSpawn !== 0 && diff <= 0 ? 'text-red-400' : ''}`}>{boss.name}</span>
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-2 py-2 text-xs text-slate-400 truncate">
                                                     {boss.bigArea}
                                                 </td>
                                                 <td className="px-2 py-2 text-center">
-                                                    <div className="flex items-center justify-center gap-2">
+                                                    <div className="flex items-center justify-center gap-1.5">
                                                         <span className={`text-sm font-mono font-bold ${boss.nextSpawn !== 0 && diff <= 0 ? 'text-red-400' : 'text-slate-200'}`}>{formatPredictedTime(boss.nextSpawn)}</span>
                                                         {boss.isAutoUpdated && <span className="text-[9px] font-bold text-red-500 bg-red-500/10 px-1 rounded border border-red-500/20 whitespace-nowrap">自動更新</span>}
                                                     </div>
@@ -1213,8 +1535,8 @@
                                 </div>
 
                                 <div className="space-y-2">
-                                    <div className="flex items-center gap-3 bg-slate-900/70 p-2 rounded-xl border border-slate-800 text-xs">
-                                        <label className="flex items-center gap-1.5 flex-grow min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2 bg-slate-900/70 p-2 rounded-xl border border-slate-800 text-xs">
+                                        <label className="flex items-center gap-1.5 flex-grow min-w-[180px]">
                                             <span className="text-slate-400 font-bold whitespace-nowrap">名前</span>
                                             <input
                                                 type="text"
@@ -1231,6 +1553,10 @@
                                         <label className="flex items-center gap-1.5 cursor-pointer text-slate-400 font-bold select-none whitespace-nowrap">
                                             <input type="checkbox" className="accent-red-500 w-4 h-4 cursor-pointer" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} />
                                             匿名
+                                        </label>
+                                        <label className="flex items-center gap-1.5 cursor-pointer text-slate-400 font-bold select-none whitespace-nowrap">
+                                            <input type="checkbox" className="accent-red-500 w-4 h-4 cursor-pointer" checked={chatFavoriteChecked} onChange={(e) => setChatFavoriteChecked(e.target.checked)} />
+                                            お気に入り
                                         </label>
                                     </div>
                                     <div className="flex gap-2">
@@ -1277,6 +1603,53 @@
                         )}
                     </div>
 
+                    {isBossEditOpen && (
+                        <div className="fixed inset-0 z-[120] flex items-start justify-center p-3 pt-10 bg-black/85 backdrop-blur-md modal-enter">
+                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[380px] max-h-[88vh] overflow-hidden shadow-2xl flex flex-col">
+                                <div className="p-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <IconEdit size={16} color="#f97316" />
+                                        <h3 className="font-bold text-white text-base truncate">ボス編集</h3>
+                                    </div>
+                                    <button onClick={() => setIsBossEditOpen(false)} className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-[10px] font-bold text-slate-300 hover:bg-slate-700 transition-colors">閉じる</button>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 p-3 border-b border-slate-800 bg-slate-900/70">
+                                    <button onClick={() => setBossModal({ name: "", lv: "", spawnType: "interval", value: "24", times: "12:00", bigArea: "", area: "" })} className="bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1"><IconPlus size={13} />ボス追加</button>
+                                    <button onClick={openSelectedBossSettings} disabled={!selectedEditBoss} className="bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"><IconSettings size={13} />出現設定</button>
+                                    <button onClick={() => selectedEditBoss?.isCustom && handleDeleteCustomBoss(selectedEditBoss)} disabled={!selectedEditBoss?.isCustom} className="bg-red-950/50 hover:bg-red-900/60 border border-red-500/30 text-red-200 font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"><IconTrash size={13} />削除</button>
+                                </div>
+                                <div className="p-3 overflow-y-auto scrollbar-hide flex-grow bg-slate-950/25">
+                                    <div className="space-y-1.5">
+                                        {effectiveBossOrder.map((bossName, index) => {
+                                            const boss = processedBosses.find(item => item.name === bossName);
+                                            if (!boss) return null;
+                                            const isSelected = boss.name === selectedEditBoss?.name;
+                                            return (
+                                                <button
+                                                    key={`edit-${boss.name}`}
+                                                    onClick={() => setSelectedEditBossName(boss.name)}
+                                                    className={`w-full min-h-[46px] rounded-xl border px-3 py-2 text-left transition-colors flex items-center gap-3 ${isSelected ? 'border-orange-500/60 bg-orange-500/10' : 'border-slate-800 bg-slate-900/70 hover:border-slate-700'}`}
+                                                >
+                                                    <span className={`w-6 text-center text-[10px] font-mono font-bold ${isSelected ? 'text-orange-300' : 'text-slate-600'}`}>{index + 1}</span>
+                                                    <span className={`text-[9px] px-1 rounded font-mono font-bold ${boss.color === 'purple' ? 'bg-purple-500/20 text-purple-400' : 'bg-red-500/20 text-red-400'}`}>{boss.lv}</span>
+                                                    <span className="min-w-0 flex-1">
+                                                        <span className={`block text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-slate-200'}`}>{boss.name}</span>
+                                                        <span className="block text-[9px] text-slate-600 font-mono truncate">{boss.type === 'interval' ? `${boss.currentCycle}h` : '定時'} / {boss.bigArea}</span>
+                                                    </span>
+                                                    {boss.isCustom && <span className="text-[9px] font-bold text-orange-300 bg-orange-500/10 border border-orange-500/20 rounded px-1.5 py-0.5">追加</span>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 p-3 border-t border-slate-800 bg-slate-900/80">
+                                    <button onClick={() => moveSelectedBossOrder(-1)} disabled={selectedEditIndex <= 0} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1"><IconChevronUp size={14} />上へ</button>
+                                    <button onClick={() => moveSelectedBossOrder(1)} disabled={selectedEditIndex < 0 || selectedEditIndex >= effectiveBossOrder.length - 1} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1"><IconChevronDown size={14} />下へ</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Edit Modal with large area layout */}
                     {editingBoss && (
                         <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 bg-black/80 backdrop-blur-sm pt-16 modal-enter">
@@ -1290,7 +1663,7 @@
                                             </div>
                                             <div className="text-xs text-slate-400 flex items-center gap-1 mb-3"><IconMap size={12} color="#94a3b8" /> {editingBoss.bigArea} / {editingBoss.area}</div>
                                             <div className="flex justify-between items-center">
-                                                <div className="text-[10px] text-orange-500 font-bold bg-orange-500/10 px-2 py-1 rounded border border-orange-500/20 flex items-center gap-1.5 cursor-pointer hover:bg-orange-500/20 transition-all" onClick={() => setEditingBoss(p => ({ ...p, view: 'settings' }))}>{editingBoss.type === 'interval' ? `周期: ${editingBoss.tempInterval}h` : '定時ボス'}<IconSettings size={10} /></div>
+                                                <div className="text-[10px] text-orange-500 font-bold bg-orange-500/10 px-2 py-1 rounded border border-orange-500/20">{editingBoss.type === 'interval' ? `周期: ${editingBoss.tempInterval}h` : '定時ボス'}</div>
                                                 <div className="flex items-center gap-2">{editingBoss.isAutoUpdated && <span className="text-[9px] font-bold text-red-500 uppercase">Auto</span>}{formatCountdown((editingBoss.eventTime || editingBoss.nextSpawn) - now)}</div>
                                             </div>
                                         </div>
@@ -1343,10 +1716,94 @@
                                             ) : (
                                                 <div className="mb-6"><label className="text-[10px] text-slate-500 font-bold mb-2 block uppercase tracking-wider">日間スケジュール (時間)</label><div className="space-y-2">{editingBoss.tempDailyTimes.map((time, i) => (<div key={i} className="flex gap-1 items-center bg-slate-950 p-2 rounded-lg border border-slate-800"><input type="text" inputMode="numeric" placeholder="00:00" className="bg-slate-900 text-xs px-2 py-1 rounded border border-slate-700 w-full font-mono outline-none text-center" value={time} onChange={(e) => setEditingBoss(p => ({ ...p, tempDailyTimes: p.tempDailyTimes.map((t, idx) => idx === i ? e.target.value : t) }))} /><button onClick={() => setEditingBoss(p => ({ ...p, tempDailyTimes: p.tempDailyTimes.filter((_, idx) => idx !== i) }))} className="p-1.5 text-slate-600 hover:text-red-500 transition-colors"><IconTrash size={12}/></button></div>))}<button onClick={() => setEditingBoss(p => ({ ...p, tempDailyTimes: [...p.tempDailyTimes, "00:00"] }))} className="w-full py-2 border border-dashed border-slate-700 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-800 transition-colors flex items-center justify-center gap-1"><IconPlus size={10} /> 時間を追加</button></div></div>
                                             )}
-                                            <div className="grid grid-cols-2 gap-2 mt-4 flex-shrink-0"><button onClick={() => setEditingBoss(p => ({ ...p, view: 'record' }))} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3 rounded-xl border border-slate-700 text-xs transition-colors">戻る</button><button onClick={handleSaveSettings} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg text-xs transition-colors active:scale-95">保存</button></div>
+                                            <div className="grid grid-cols-2 gap-2 mt-4 flex-shrink-0"><button onClick={closeBossSettings} className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3 rounded-xl border border-slate-700 text-xs transition-colors">戻る</button><button onClick={handleSaveSettings} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg text-xs transition-colors active:scale-95">保存</button></div>
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    )}
+
+                    {bossModal && (
+                        <div className="fixed inset-0 z-[180] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md modal-enter">
+                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[360px] p-6 shadow-2xl">
+                                <h3 className="text-lg font-bold mb-6 text-white">ボス追加</h3>
+                                <div className="space-y-3 mb-8">
+                                    <input
+                                        type="text"
+                                        className="bg-slate-950 border border-slate-800 rounded-xl w-full p-3 text-sm outline-none focus:border-orange-500"
+                                        value={bossModal.name}
+                                        onChange={(e) => setBossModal({ ...bossModal, name: e.target.value })}
+                                        placeholder="ボス名"
+                                    />
+                                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-800 bg-slate-950 p-1">
+                                        <button
+                                            onClick={() => setBossModal({ ...bossModal, spawnType: "interval" })}
+                                            className={`py-2 rounded-lg text-xs font-bold transition-colors ${bossModal.spawnType !== "daily" ? 'bg-orange-600 text-white' : 'text-slate-500 hover:text-slate-200'}`}
+                                        >
+                                            周期
+                                        </button>
+                                        <button
+                                            onClick={() => setBossModal({ ...bossModal, spawnType: "daily" })}
+                                            className={`py-2 rounded-lg text-xs font-bold transition-colors ${bossModal.spawnType === "daily" ? 'bg-orange-600 text-white' : 'text-slate-500 hover:text-slate-200'}`}
+                                        >
+                                            定時
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <input
+                                            type="number"
+                                            inputMode="numeric"
+                                            min="1"
+                                            className="bg-slate-950 border border-slate-800 rounded-xl w-full p-3 text-sm outline-none focus:border-orange-500"
+                                            value={bossModal.lv}
+                                            onChange={(e) => setBossModal({ ...bossModal, lv: e.target.value })}
+                                            placeholder="Lv"
+                                        />
+                                        {bossModal.spawnType === "daily" ? (
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                className="bg-slate-950 border border-slate-800 rounded-xl w-full p-3 text-sm outline-none focus:border-orange-500"
+                                                value={bossModal.times}
+                                                onChange={(e) => setBossModal({ ...bossModal, times: e.target.value })}
+                                                placeholder="12:00 18:00"
+                                            />
+                                        ) : (
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    inputMode="decimal"
+                                                    min="0.5"
+                                                    step="0.5"
+                                                    className="bg-slate-950 border border-slate-800 rounded-xl w-full p-3 pr-8 text-sm outline-none focus:border-orange-500"
+                                                    value={bossModal.value}
+                                                    onChange={(e) => setBossModal({ ...bossModal, value: e.target.value })}
+                                                    placeholder="周期"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-600">h</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="bg-slate-950 border border-slate-800 rounded-xl w-full p-3 text-sm outline-none focus:border-orange-500"
+                                        value={bossModal.bigArea}
+                                        onChange={(e) => setBossModal({ ...bossModal, bigArea: e.target.value })}
+                                        placeholder="地域（未入力ならカスタム）"
+                                    />
+                                    <input
+                                        type="text"
+                                        className="bg-slate-950 border border-slate-800 rounded-xl w-full p-3 text-sm outline-none focus:border-orange-500"
+                                        value={bossModal.area}
+                                        onChange={(e) => setBossModal({ ...bossModal, area: e.target.value })}
+                                        placeholder="詳細エリア（未入力なら未設定）"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button onClick={() => setBossModal(null)} className="bg-slate-800 hover:bg-slate-700 py-3 rounded-xl text-xs font-bold transition-colors">キャンセル</button>
+                                    <button onClick={handleSaveCustomBoss} className="bg-orange-600 hover:bg-orange-500 py-3 rounded-xl text-xs font-bold active:scale-95 shadow-lg transition-colors">追加</button>
+                                </div>
                             </div>
                         </div>
                     )}
