@@ -85,17 +85,17 @@
             { lv: 70, name: "エゴ", type: "interval", value: 21, bigArea: "ウラン峡谷", area: "奪還集結地", color: "red" },
             { lv: 70, name: "クレメンティス", type: "weekly", schedule: [{ day: 1, time: "12:30" }, { day: 4, time: "20:00" }], bigArea: "汚染された盆地", area: "白の魔女のゆりかご", color: "red" },
             { lv: 75, name: "リベラ", type: "interval", value: 24, bigArea: "守護者の遺跡", area: "高い風の半島", color: "red" },
-            { lv: 75, name: "アラネオ", type: "interval", value: 24, bigArea: "ティリオサの墓地下", area: "ティリオサの墓地下1階", color: "red" },
+            { lv: 75, name: "アラネオ", type: "interval", value: 24, bigArea: "ティリオサの墓地地下", area: "ティリオサの墓地地下1階", color: "red" },
             { lv: 80, name: "アンドゥミエル", type: "interval", value: 24, bigArea: "秘密実験室", area: "実験体研究室", color: "red" },
             { lv: 80, name: "サピルス", type: "weekly", schedule: [{ day: 0, time: "18:00" }, { day: 2, time: "12:30" }], bigArea: "三日月湖", area: "月光の束縛", color: "red" },
             { lv: 80, name: "ネウトロ", type: "weekly", schedule: [{ day: 2, time: "20:00" }, { day: 4, time: "12:30" }], bigArea: "絶唱者の砂漠", area: "愛情の決戦", color: "red" },
             { lv: 85, name: "レディ・ダリア", type: "interval", value: 18, bigArea: "黄金の丘陵地", area: "血染めの陰", color: "red" },
-            { lv: 85, name: "将軍アクレウス", type: "interval", value: 29, bigArea: "ティリオサの墓地下", area: "ティリオサ of 墓地地下2階", color: "red" },
+            { lv: 85, name: "将軍アクレウス", type: "interval", value: 29, bigArea: "ティリオサの墓地地下", area: "ティリオサの墓地地下2階", color: "red" },
             { lv: 85, name: "テュメレ", type: "weekly", schedule: [{ day: 1, time: "20:00" }, { day: 3, time: "12:30" }], bigArea: "黄金の丘陵地", area: "暴走の痕跡", color: "red" },
             { lv: 85, name: "パルト", type: "daily", times: ["12:00", "21:00"], bigArea: "守護者の遺跡", area: "特殊出現", color: "purple" },
             { lv: 88, name: "アメンティス", type: "interval", value: 29, bigArea: "栄光の地", area: "石灰岩の岬", color: "red" },
             { lv: 88, name: "ブラウドモア", type: "interval", value: 32, bigArea: "聖戦士団激戦地", area: "蔓薔薇の橋", color: "red" },
-            { lv: 90, name: "ミラベ", type: "weekly", schedule: [{ day: 6, time: "16:00" }], bigArea: "ティリオサの墓地下", area: "ティリオサ of 墓地地下3階", color: "red" },
+            { lv: 90, name: "ミラベ", type: "weekly", schedule: [{ day: 6, time: "16:00" }], bigArea: "ティリオサの墓地地下", area: "ティリオサの墓地地下3階", color: "red" },
             { lv: 93, name: "ワニタス", type: "interval", value: 48, bigArea: "革命の高原", area: "罠の沼地", color: "red" },
             { lv: 93, name: "メトゥス", type: "interval", value: 48, bigArea: "革命の高原", area: "追従者の野原", color: "red" },
             { lv: 93, name: "デュプリカン", type: "interval", value: 48, bigArea: "革命の高原", area: "操り人形の玉座", color: "red" },
@@ -130,6 +130,7 @@
         const IconSettings = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
         const IconHistory = ({size=18, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>;
         const IconTrash = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>;
+        const IconCopy = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>;
         const IconPlus = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
         const IconSort = ({size=14, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="m15 18-3 3-3-3"/><path d="M12 3v18"/><path d="m9 6 3-3 3 3"/></svg>;
         const IconTool = ({size=18, color="currentColor"}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display:'inline'}}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>;
@@ -605,6 +606,48 @@
                 const minutes = normalizeNotifyLeadMinutes(rawValue);
                 localStorage.setItem(NOTIFY_LEAD_MINUTES_KEY, String(minutes));
                 setNotifyLeadMinutes(minutes);
+            };
+
+            const buildTopEventCopyLine = (event) => {
+                const areaText = event.bigArea || event.area || "";
+                const timeText = formatPredictedTime(event.eventTime);
+                return areaText ? `${event.name} (${areaText} )${timeText}` : `${event.name} ${timeText}`;
+            };
+
+            const copyTextToClipboard = async (text) => {
+                if (navigator.clipboard?.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        return true;
+                    } catch (e) {
+                        console.warn("Clipboard API copy failed.", e);
+                    }
+                }
+
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'fixed';
+                textarea.style.top = '0';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.focus({ preventScroll: true });
+                textarea.select();
+                textarea.setSelectionRange(0, text.length);
+                try {
+                    return document.execCommand('copy');
+                } catch (e) {
+                    console.warn("Fallback copy failed.", e);
+                    return false;
+                } finally {
+                    document.body.removeChild(textarea);
+                }
+            };
+
+            const handleCopyTopEvent = async (event, e) => {
+                e.stopPropagation();
+                const copied = await copyTextToClipboard(buildTopEventCopyLine(event));
+                showToast(copied ? "1行コピーしました。" : "コピーに失敗しました。", copied ? "success" : "warning");
             };
 
             const handleToggleNotifications = async () => {
@@ -1422,13 +1465,14 @@
                                 </div>
                             </div>
                             <div className="bg-slate-900/60 rounded-xl border border-slate-800 shadow-xl overflow-x-auto">
-                                <table className="w-full text-left border-collapse min-w-[340px] table-auto">
+                                <table className="w-full text-left border-collapse min-w-[390px] table-auto">
                                     <thead className="bg-slate-950/50 border-b border-slate-800 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
                                         <tr>
                                             <th className="px-1 py-2 w-px text-center whitespace-nowrap">No.</th>
                                             <th className="px-2 py-2 w-[44%]">名前 / Lv</th>
                                             <th className="px-2 py-2 w-[25%]">エリア</th>
                                             <th className="px-2 py-2 w-[30%] text-center">予想時間</th>
+                                            <th className="px-1 py-2 w-px text-center whitespace-nowrap">コピー</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1451,6 +1495,17 @@
                                                             <span className="text-sm font-mono font-bold text-orange-400 whitespace-nowrap">{formatPredictedTime(event.eventTime)}</span>
                                                             {event.isAutoUpdated && <span className="text-[9px] font-bold text-red-500 bg-red-500/10 px-1 rounded border border-red-500/20">自動更新</span>}
                                                         </div>
+                                                    </td>
+                                                    <td className="px-1 py-3 text-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => handleCopyTopEvent(event, e)}
+                                                            className="h-9 w-9 rounded-lg border border-slate-700/70 bg-slate-950/70 text-slate-400 hover:text-white hover:border-orange-500/60 hover:bg-orange-600/20 active:scale-95 transition-all inline-flex items-center justify-center"
+                                                            title="1行コピー"
+                                                            aria-label={`${event.name}を1行コピー`}
+                                                        >
+                                                            <IconCopy size={13} />
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             );
