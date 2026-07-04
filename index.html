@@ -551,12 +551,18 @@
         };
 
         const handleSafeTimeInput = (rawVal, setter) => {
-            let val = rawVal.normalize('NFKC');
-            if (/[/-]|\s/.test(val)) { setter(val); return; }
-            let digits = val.replace(/\D/g, '').slice(0, 4);
-            if (digits.length === 3) setter(`0${digits.slice(0, 1)}:${digits.slice(1)}`);
-            else if (digits.length === 4) setter(`${digits.slice(0, 2)}:${digits.slice(2)}`);
-            else setter(digits);
+            const val = rawVal.normalize('NFKC');
+            if (val.includes(':')) {
+                const [hours = "", minutes = ""] = val.split(':');
+                setter(`${hours.replace(/\D/g, '').slice(0, 2)}:${minutes.replace(/\D/g, '').slice(0, 2)}`);
+                return;
+            }
+            setter(val.replace(/\D/g, '').slice(0, 4));
+        };
+
+        const settleClockInput = (value, setter) => {
+            const normalized = normalizeClockInput(value);
+            setter(normalized || String(value || '').normalize('NFKC').replace(/[^\d:]/g, '').slice(0, 5));
         };
 
         const handleSafeDateInput = (rawVal, setter) => {
@@ -1820,6 +1826,7 @@
                                                                 value={editingBoss.tempClock || ""}
                                                                 placeholder="02:45"
                                                                 onChange={(e) => handleSafeTimeInput(e.target.value, (v) => setEditingBoss(prev => ({ ...prev, tempClock: v })))}
+                                                                onBlur={(e) => settleClockInput(e.target.value, (v) => setEditingBoss(prev => ({ ...prev, tempClock: v })))}
                                                                 onKeyDown={(e) => e.key === 'Enter' && handleSaveRecord()}
                                                             />
                                                         </div>
@@ -2079,6 +2086,7 @@
                                                 value={maintClock}
                                                 placeholder="14:00"
                                                 onChange={(e) => handleSafeTimeInput(e.target.value, setMaintClock)}
+                                                onBlur={(e) => settleClockInput(e.target.value, setMaintClock)}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleMaintReset()}
                                             />
                                         </div>
