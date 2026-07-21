@@ -47,12 +47,14 @@
         const UTILITY_LINKS_COLLECTION_PATH = `artifacts/${appId}/public/data/utility_links`;
         const CHAT_MESSAGES_COLLECTION_PATH = `artifacts/${appId}/public/data/chat_messages`;
         const APP_SETTINGS_COLLECTION_PATH = `artifacts/${appId}/public/data/app_settings`;
+        const DISCORD_NOTIFICATIONS_COLLECTION_PATH = `artifacts/${appId}/public/data/discord_notifications`;
         const STORAGE_KEY = "L9_BOSS_TIMER_DATA";
         const SENDER_NAME_KEY = "L9_BOSS_SENDER_NAME";
         const ANON_STATE_KEY = "L9_BOSS_ANON_STATE";
         const NOTIFY_ENABLED_KEY = "L9_BOSS_NOTIFY_ENABLED";
         const NOTIFY_LEAD_MINUTES_KEY = "L9_BOSS_NOTIFY_LEAD_MINUTES";
         const NOTIFIED_EVENTS_KEY = "L9_BOSS_NOTIFIED_EVENTS";
+        const DISCORD_SENT_EVENTS_KEY = "L9_BOSS_DISCORD_SENT_EVENTS";
         const CHAT_LAST_SEEN_KEY = "L9_BOSS_CHAT_LAST_SEEN";
         const GRACE_PERIOD = 10 * 60 * 1000; 
         const DEFAULT_NOTIFY_LEAD_MINUTES = 5;
@@ -75,6 +77,10 @@
             warning: "border-orange-500/40 bg-orange-950/95 text-orange-100",
             error: "border-red-500/40 bg-red-950/95 text-red-100",
             info: "border-slate-600 bg-slate-900/95 text-slate-100"
+        };
+        const DEFAULT_DISCORD_SETTINGS = {
+            manualEnabled: true,
+            autoEnabled: true
         };
 
         // --- Core Boss Data strictly synchronized with image_1b3a4a.png ---
@@ -296,6 +302,14 @@
             };
         };
 
+        const sanitizeDiscordSettings = (settings) => {
+            if (!isPlainObject(settings)) return DEFAULT_DISCORD_SETTINGS;
+            return {
+                manualEnabled: settings.manualEnabled !== false,
+                autoEnabled: settings.autoEnabled !== false
+            };
+        };
+
         const sanitizeBossOrder = (order, fallbackOrder = DEFAULT_BOSS_ORDER) => {
             const allowedNames = new Set(fallbackOrder);
             const seen = new Set();
@@ -363,6 +377,17 @@
             }
         };
 
+        const readDiscordSentEvents = () => {
+            try {
+                const saved = JSON.parse(localStorage.getItem(DISCORD_SENT_EVENTS_KEY) || "[]");
+                if (!Array.isArray(saved)) return new Set();
+                return new Set(saved.filter(item => typeof item === 'string'));
+            } catch (e) {
+                localStorage.removeItem(DISCORD_SENT_EVENTS_KEY);
+                return new Set();
+            }
+        };
+
         const readChatLastSeen = () => {
             const timestamp = Number(localStorage.getItem(CHAT_LAST_SEEN_KEY));
             return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0;
@@ -374,6 +399,21 @@
             } catch (e) {
                 console.warn("Could not persist notification history.", e);
             }
+        };
+
+        const persistDiscordSentEvents = (events) => {
+            try {
+                localStorage.setItem(DISCORD_SENT_EVENTS_KEY, JSON.stringify([...events].slice(-300)));
+            } catch (e) {
+                console.warn("Could not persist Discord notification history.", e);
+            }
+        };
+
+        const buildBossEventId = (event) => `${event.name}:${event.eventTime}`;
+
+        const buildDiscordNotificationDocId = (event) => {
+            const name = String(event.name || "boss").normalize('NFKC').replace(/[\/\\]/g, "_").slice(0, 120);
+            return `${name || "boss"}_${event.eventTime}`;
         };
 
         const readNotificationEnabled = () => localStorage.getItem(NOTIFY_ENABLED_KEY) === "true";
@@ -593,6 +633,7 @@
             const [chatFavoriteChecked, setChatFavoriteChecked] = useState(true);
             const [editingBoss, setEditingBoss] = useState(null); 
             const [isMaintResetOpen, setIsMaintResetOpen] = useState(false);
+            const [isDiscordSettingsOpen, setIsDiscordSettingsOpen] = useState(false);
             const [linkModal, setLinkModal] = useState(null);
             const [bossModal, setBossModal] = useState(null);
             const [maintInput, setMaintTime] = useState("");
@@ -603,9 +644,12 @@
             const [notifyLeadMinutes, setNotifyLeadMinutes] = useState(readNotifyLeadMinutes);
             const [notificationPermission, setNotificationPermission] = useState(() => isNotificationSupported() ? Notification.permission : "unsupported");
             const [isDiscordSending, setIsDiscordSending] = useState(false);
+            const [discordSettings, setDiscordSettings] = useState(DEFAULT_DISCORD_SETTINGS);
             const [isAnonymous, setIsAnonymous] = useState(() => localStorage.getItem(ANON_STATE_KEY) === 'true');
             const toastTimerRef = useRef(null);
             const notifiedEventsRef = useRef(readNotifiedEvents());
+            const discordSentEventsRef = useRef(readDiscordSentEvents());
+            const discordPendingEventsRef = useRef(new Set());
             const lastSeenChatTimestampRef = useRef(readChatLastSeen());
             const isChatSnapshotInitializedRef = useRef(false);
             const senderNameRef = useRef(localStorage.getItem(SENDER_NAME_KEY) || "");
@@ -632,6 +676,21 @@
                 const minutes = normalizeNotifyLeadMinutes(rawValue);
                 localStorage.setItem(NOTIFY_LEAD_MINUTES_KEY, String(minutes));
                 setNotifyLeadMinutes(minutes);
+            };
+
+            const handleDiscordSettingChange = async (key, value) => {
+                const nextSettings = sanitizeDiscordSettings({ ...discordSettings, [key]: value });
+                setDiscordSettings(nextSettings);
+                try {
+                    await db.collection(APP_SETTINGS_COLLECTION_PATH).doc('discord_settings').set({
+                        ...nextSettings,
+                        updatedAt: Date.now()
+                    }, { merge: true });
+                    showToast("Discord通知設定を保存しました。", "success");
+                } catch (error) {
+                    console.warn("Discord settings save failed.", error);
+                    showToast("Discord通知設定の保存に失敗しました。", "warning");
+                }
             };
 
             const buildTopEventCopyArea = (event) => {
@@ -795,6 +854,14 @@
                             if (!isMounted) return;
                             showToast("追加ボスの同期に失敗しました。", "warning");
                         }));
+                        unsubscribes.push(db.collection(APP_SETTINGS_COLLECTION_PATH).doc('discord_settings').onSnapshot(doc => {
+                            if (!isMounted) return;
+                            setDiscordSettings(sanitizeDiscordSettings(doc.exists ? doc.data() : null));
+                        }, (e) => {
+                            console.warn("Discord settings sync failed.", e);
+                            if (!isMounted) return;
+                            showToast("Discord通知設定の同期に失敗しました。", "warning");
+                        }));
                     } catch (e) {
                         console.warn("Firebase initialization failed.", e);
                         if (!isMounted) return;
@@ -919,39 +986,100 @@
                 return soonest.length > 0 ? soonest[0] : null;
             }, [top10SoonEvents, now]);
 
-            const buildDiscordBossMessage = (event) => {
+            const buildDiscordBossMessage = (event, options = {}) => {
+                const { isTest = false, leadMinutes = notifyLeadMinutes } = options;
                 if (!event) {
-                    return "【LORD NINE】Discord通知テスト";
+                    return isTest ? "【LORD NINE】Discord通知テスト" : `【LORD NINE】${leadMinutes}分前通知`;
                 }
                 const locationText = [event.bigArea, event.area].filter(Boolean).join(" / ");
                 const detailText = [`Lv.${event.lv}`, locationText].filter(Boolean).join(" / ");
                 return [
-                    "【LORD NINE】Discord通知テスト",
+                    isTest ? "【LORD NINE】Discord通知テスト" : `【LORD NINE】${leadMinutes}分前通知`,
                     `${event.name} が ${formatPredictedTime(event.eventTime)} に出現予定`,
                     detailText
                 ].filter(Boolean).join("\n");
             };
 
+            const postDiscordMessage = async (content) => {
+                const response = await fetch("/.netlify/functions/discord-notify", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ content })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(result.error || "Discord notification failed");
+                }
+                return result;
+            };
+
             const handleSendDiscordTest = async () => {
                 if (isDiscordSending) return;
+                if (!discordSettings.manualEnabled) {
+                    showToast("Discord手動送信はオフです。", "info");
+                    return;
+                }
                 const targetEvent = globalMostRecent || top10SoonEvents[0];
                 setIsDiscordSending(true);
                 try {
-                    const response = await fetch("/.netlify/functions/discord-notify", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ content: buildDiscordBossMessage(targetEvent) })
-                    });
-                    const result = await response.json().catch(() => ({}));
-                    if (!response.ok) {
-                        throw new Error(result.error || "Discord notification failed");
-                    }
+                    await postDiscordMessage(buildDiscordBossMessage(targetEvent, { isTest: true }));
                     showToast("Discordにテスト通知を送信しました。", "success");
                 } catch (error) {
                     console.warn("Discord notification failed.", error);
                     showToast("Discord通知に失敗しました。Netlifyの環境変数を確認してください。", "warning");
                 } finally {
                     setIsDiscordSending(false);
+                }
+            };
+
+            const sendDiscordBossNotification = async (event, eventId) => {
+                const nowTs = Date.now();
+                const docRef = db.collection(DISCORD_NOTIFICATIONS_COLLECTION_PATH).doc(buildDiscordNotificationDocId(event));
+                let reserved = false;
+                try {
+                    const shouldSend = await db.runTransaction(async transaction => {
+                        const doc = await transaction.get(docRef);
+                        const data = doc.exists ? (doc.data() || {}) : {};
+                        const lockUntil = Number(data.lockUntil) || 0;
+                        if (data.status === "sent") return false;
+                        if (data.status === "sending" && lockUntil > nowTs) return false;
+
+                        transaction.set(docRef, {
+                            eventId,
+                            bossName: event.name,
+                            eventTime: event.eventTime,
+                            scheduledTimeText: formatPredictedTime(event.eventTime),
+                            notifyLeadMinutes,
+                            status: "sending",
+                            lockedAt: nowTs,
+                            lockUntil: nowTs + (2 * 60 * 1000),
+                            updatedAt: nowTs
+                        }, { merge: true });
+                        return true;
+                    });
+
+                    if (!shouldSend) return true;
+                    reserved = true;
+                    await postDiscordMessage(buildDiscordBossMessage(event, { leadMinutes: notifyLeadMinutes }));
+                    await docRef.set({
+                        status: "sent",
+                        sentAt: Date.now(),
+                        lockUntil: 0,
+                        updatedAt: Date.now()
+                    }, { merge: true });
+                    return true;
+                } catch (error) {
+                    console.warn("Automatic Discord notification failed.", error);
+                    if (reserved) {
+                        await docRef.set({
+                            status: "failed",
+                            failedAt: Date.now(),
+                            lockUntil: 0,
+                            error: String(error?.message || error).slice(0, 300),
+                            updatedAt: Date.now()
+                        }, { merge: true }).catch(e => console.warn("Could not record Discord notification failure.", e));
+                    }
+                    return true;
                 }
             };
 
@@ -990,7 +1118,7 @@
                 if (!notificationsEnabled || notificationPermission !== "granted") return;
                 const notifyLeadMs = notifyLeadMinutes * 60 * 1000;
                 const staleCutoff = now - (24 * 60 * 60 * 1000);
-                const currentEvents = new Set(top10SoonEvents.map(event => `${event.name}:${event.eventTime}`));
+                const currentEvents = new Set(top10SoonEvents.map(buildBossEventId));
                 notifiedEventsRef.current.forEach(id => {
                     const eventTime = Number(id.split(':').pop());
                     if (!Number.isFinite(eventTime) || eventTime < staleCutoff) {
@@ -1000,7 +1128,7 @@
 
                 top10SoonEvents.forEach(event => {
                     const diff = event.eventTime - now;
-                    const eventId = `${event.name}:${event.eventTime}`;
+                    const eventId = buildBossEventId(event);
                     if (diff > 0 && diff <= notifyLeadMs && !notifiedEventsRef.current.has(eventId)) {
                         notifiedEventsRef.current.add(eventId);
                         persistNotifiedEvents(notifiedEventsRef.current);
@@ -1019,6 +1147,47 @@
                     return currentEvents.has(id) || (Number.isFinite(eventTime) && eventTime >= staleCutoff);
                 })));
             }, [top10SoonEvents, now, notificationsEnabled, notificationPermission, notifyLeadMinutes]);
+
+            useEffect(() => {
+                if (!discordSettings.autoEnabled) return;
+                if (!isOnline) return;
+                const notifyLeadMs = notifyLeadMinutes * 60 * 1000;
+                const staleCutoff = now - (24 * 60 * 60 * 1000);
+                const currentEvents = new Set(top10SoonEvents.map(buildBossEventId));
+
+                discordSentEventsRef.current.forEach(id => {
+                    const eventTime = Number(id.split(':').pop());
+                    if (!Number.isFinite(eventTime) || eventTime < staleCutoff) {
+                        discordSentEventsRef.current.delete(id);
+                    }
+                });
+
+                top10SoonEvents.forEach(event => {
+                    const diff = event.eventTime - now;
+                    const eventId = buildBossEventId(event);
+                    if (
+                        diff > 0
+                        && diff <= notifyLeadMs
+                        && !discordSentEventsRef.current.has(eventId)
+                        && !discordPendingEventsRef.current.has(eventId)
+                    ) {
+                        discordPendingEventsRef.current.add(eventId);
+                        sendDiscordBossNotification(event, eventId).then(handled => {
+                            if (handled) {
+                                discordSentEventsRef.current.add(eventId);
+                                persistDiscordSentEvents(discordSentEventsRef.current);
+                            }
+                        }).finally(() => {
+                            discordPendingEventsRef.current.delete(eventId);
+                        });
+                    }
+                });
+
+                persistDiscordSentEvents(new Set([...discordSentEventsRef.current].filter(id => {
+                    const eventTime = Number(id.split(':').pop());
+                    return currentEvents.has(id) || (Number.isFinite(eventTime) && eventTime >= staleCutoff);
+                })));
+            }, [top10SoonEvents, now, notifyLeadMinutes, isOnline, discordSettings.autoEnabled]);
 
             const handleSaveRecord = async () => {
                 if (!editingBoss) return;
@@ -1472,9 +1641,10 @@
                                         <button onClick={handleToggleNotifications} className={`h-9 w-9 rounded-lg transition-colors border flex items-center justify-center ${notificationsEnabled && notificationPermission === 'granted' ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border-slate-700/50'}`} title={notificationsEnabled ? `${notifyLeadMinutes}分前通知をオフ` : `${notifyLeadMinutes}分前通知をオン`} aria-label={notificationsEnabled ? `${notifyLeadMinutes}分前通知をオフ` : `${notifyLeadMinutes}分前通知をオン`}>
                                             {notificationsEnabled && notificationPermission === 'granted' ? <IconBell size={18} /> : <IconBellOff size={18} />}
                                         </button>
-                                        <button onClick={handleSendDiscordTest} disabled={isDiscordSending} className="h-9 w-9 flex items-center justify-center bg-indigo-600/20 hover:bg-indigo-600/30 rounded-lg text-indigo-300 hover:text-white transition-colors border border-indigo-500/40 disabled:opacity-50 disabled:cursor-wait" title={isDiscordSending ? "Discord通知送信中" : "Discord通知テスト"} aria-label={isDiscordSending ? "Discord通知送信中" : "Discord通知テスト"}>
+                                        <button onClick={handleSendDiscordTest} disabled={isDiscordSending || !discordSettings.manualEnabled} className={`h-9 w-9 flex items-center justify-center rounded-lg transition-colors border disabled:opacity-50 ${discordSettings.manualEnabled ? 'bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white border-indigo-500/40 disabled:cursor-wait' : 'bg-slate-800 text-slate-600 border-slate-700/50 disabled:cursor-not-allowed'}`} title={!discordSettings.manualEnabled ? "Discord手動送信オフ" : (isDiscordSending ? "Discord通知送信中" : "Discord通知テスト")} aria-label={!discordSettings.manualEnabled ? "Discord手動送信オフ" : (isDiscordSending ? "Discord通知送信中" : "Discord通知テスト")}>
                                             <IconSend size={17} />
                                         </button>
+                                        <button onClick={() => setIsDiscordSettingsOpen(true)} className={`h-9 w-9 flex items-center justify-center rounded-lg transition-colors border ${discordSettings.autoEnabled ? 'bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white border-indigo-500/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-500 hover:text-white border-slate-700/50'}`} title="Discord通知設定" aria-label="Discord通知設定"><IconSettings size={17} /></button>
                                         <button onClick={() => { const ts = Date.now(); setMaintDate(formatToMD(ts)); setMaintClock(formatToHHMM(ts)); setMaintTime(formatToMDHM(ts)); setIsMaintResetOpen(true); }} className="h-9 w-9 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors border border-slate-700/50" title="メンテリセット" aria-label="メンテリセット"><IconTool size={18} /></button>
                                         <label className="h-9 flex items-center gap-1 rounded-lg bg-slate-900/80 border border-slate-800 px-2 text-[10px] font-bold text-slate-400">
                                             <input
@@ -1911,6 +2081,50 @@
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    )}
+
+                    {isDiscordSettingsOpen && (
+                        <div className="fixed inset-0 z-[180] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md modal-enter">
+                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-[340px] p-6 shadow-2xl">
+                                <div className="flex items-center gap-2 mb-5">
+                                    <IconSettings size={18} color="#818cf8" />
+                                    <h3 className="text-lg font-bold text-white">Discord通知設定</h3>
+                                </div>
+                                <div className="space-y-3 mb-6">
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={discordSettings.manualEnabled}
+                                        onClick={() => handleDiscordSettingChange('manualEnabled', !discordSettings.manualEnabled)}
+                                        className="w-full flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-left transition-colors hover:border-indigo-500/50"
+                                    >
+                                        <span>
+                                            <span className="block text-sm font-bold text-slate-100">手動送信</span>
+                                            <span className="block text-[10px] font-bold text-slate-500 mt-1">紙飛行機ボタン</span>
+                                        </span>
+                                        <span className={`w-12 h-7 rounded-full p-1 transition-colors ${discordSettings.manualEnabled ? 'bg-indigo-600' : 'bg-slate-700'}`}>
+                                            <span className={`block w-5 h-5 rounded-full bg-white transition-transform ${discordSettings.manualEnabled ? 'translate-x-5' : 'translate-x-0'}`}></span>
+                                        </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={discordSettings.autoEnabled}
+                                        onClick={() => handleDiscordSettingChange('autoEnabled', !discordSettings.autoEnabled)}
+                                        className="w-full flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-left transition-colors hover:border-indigo-500/50"
+                                    >
+                                        <span>
+                                            <span className="block text-sm font-bold text-slate-100">自動送信</span>
+                                            <span className="block text-[10px] font-bold text-slate-500 mt-1">{notifyLeadMinutes}分前通知</span>
+                                        </span>
+                                        <span className={`w-12 h-7 rounded-full p-1 transition-colors ${discordSettings.autoEnabled ? 'bg-indigo-600' : 'bg-slate-700'}`}>
+                                            <span className={`block w-5 h-5 rounded-full bg-white transition-transform ${discordSettings.autoEnabled ? 'translate-x-5' : 'translate-x-0'}`}></span>
+                                        </span>
+                                    </button>
+                                </div>
+                                <button onClick={() => setIsDiscordSettingsOpen(false)} className="w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-xl text-xs font-bold transition-colors">閉じる</button>
                             </div>
                         </div>
                     )}
