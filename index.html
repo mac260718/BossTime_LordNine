@@ -991,12 +991,11 @@
                 return `${d.getHours().toString().padStart(2, '0')}：${d.getMinutes().toString().padStart(2, '0')}`;
             };
 
-            const buildDiscordBossMessage = (event, options = {}) => {
-                const { isAuto = false } = options;
+            const buildDiscordBossMessage = (event) => {
                 if (!event) return "";
                 const detailText = [`Lv${event.lv}`, event.bigArea, event.area].filter(Boolean).join("/");
                 const line = `${formatDiscordClock(event.eventTime)}　${event.name}（${detailText}）`;
-                return isAuto ? `${line}\n※自動更新` : line;
+                return event.isAutoUpdated ? `${line}\n※自動更新` : line;
             };
 
             const postDiscordMessage = async (content) => {
@@ -1064,7 +1063,7 @@
 
                     if (!shouldSend) return true;
                     reserved = true;
-                    await postDiscordMessage(buildDiscordBossMessage(event, { isAuto: true }));
+                    await postDiscordMessage(buildDiscordBossMessage(event));
                     await docRef.set({
                         status: "sent",
                         sentAt: Date.now(),
