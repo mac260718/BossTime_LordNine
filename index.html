@@ -602,6 +602,7 @@
             const [notificationsEnabled, setNotificationsEnabled] = useState(readNotificationEnabled);
             const [notifyLeadMinutes, setNotifyLeadMinutes] = useState(readNotifyLeadMinutes);
             const [notificationPermission, setNotificationPermission] = useState(() => isNotificationSupported() ? Notification.permission : "unsupported");
+            const [isDiscordSending, setIsDiscordSending] = useState(false);
             const [isAnonymous, setIsAnonymous] = useState(() => localStorage.getItem(ANON_STATE_KEY) === 'true');
             const toastTimerRef = useRef(null);
             const notifiedEventsRef = useRef(readNotifiedEvents());
@@ -917,6 +918,42 @@
                 const soonest = [...top10SoonEvents].filter(e => e.eventTime > now);
                 return soonest.length > 0 ? soonest[0] : null;
             }, [top10SoonEvents, now]);
+
+            const buildDiscordBossMessage = (event) => {
+                if (!event) {
+                    return "【LORD NINE】Discord通知テスト";
+                }
+                const locationText = [event.bigArea, event.area].filter(Boolean).join(" / ");
+                const detailText = [`Lv.${event.lv}`, locationText].filter(Boolean).join(" / ");
+                return [
+                    "【LORD NINE】Discord通知テスト",
+                    `${event.name} が ${formatPredictedTime(event.eventTime)} に出現予定`,
+                    detailText
+                ].filter(Boolean).join("\n");
+            };
+
+            const handleSendDiscordTest = async () => {
+                if (isDiscordSending) return;
+                const targetEvent = globalMostRecent || top10SoonEvents[0];
+                setIsDiscordSending(true);
+                try {
+                    const response = await fetch("/.netlify/functions/discord-notify", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ content: buildDiscordBossMessage(targetEvent) })
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error(result.error || "Discord notification failed");
+                    }
+                    showToast("Discordにテスト通知を送信しました。", "success");
+                } catch (error) {
+                    console.warn("Discord notification failed.", error);
+                    showToast("Discord通知に失敗しました。Netlifyの環境変数を確認してください。", "warning");
+                } finally {
+                    setIsDiscordSending(false);
+                }
+            };
 
             const pinnedMessages = useMemo(() => {
                 return messages.filter(message => message.isPinned).sort((a, b) => b.timestamp - a.timestamp).slice(0, 10);
@@ -1434,6 +1471,9 @@
                                     <div className="mt-2 flex items-center gap-2">
                                         <button onClick={handleToggleNotifications} className={`h-9 w-9 rounded-lg transition-colors border flex items-center justify-center ${notificationsEnabled && notificationPermission === 'granted' ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border-slate-700/50'}`} title={notificationsEnabled ? `${notifyLeadMinutes}分前通知をオフ` : `${notifyLeadMinutes}分前通知をオン`} aria-label={notificationsEnabled ? `${notifyLeadMinutes}分前通知をオフ` : `${notifyLeadMinutes}分前通知をオン`}>
                                             {notificationsEnabled && notificationPermission === 'granted' ? <IconBell size={18} /> : <IconBellOff size={18} />}
+                                        </button>
+                                        <button onClick={handleSendDiscordTest} disabled={isDiscordSending} className="h-9 w-9 flex items-center justify-center bg-indigo-600/20 hover:bg-indigo-600/30 rounded-lg text-indigo-300 hover:text-white transition-colors border border-indigo-500/40 disabled:opacity-50 disabled:cursor-wait" title={isDiscordSending ? "Discord通知送信中" : "Discord通知テスト"} aria-label={isDiscordSending ? "Discord通知送信中" : "Discord通知テスト"}>
+                                            <IconSend size={17} />
                                         </button>
                                         <button onClick={() => { const ts = Date.now(); setMaintDate(formatToMD(ts)); setMaintClock(formatToHHMM(ts)); setMaintTime(formatToMDHM(ts)); setIsMaintResetOpen(true); }} className="h-9 w-9 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors border border-slate-700/50" title="メンテリセット" aria-label="メンテリセット"><IconTool size={18} /></button>
                                         <label className="h-9 flex items-center gap-1 rounded-lg bg-slate-900/80 border border-slate-800 px-2 text-[10px] font-bold text-slate-400">
