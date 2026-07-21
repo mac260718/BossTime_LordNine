@@ -986,18 +986,17 @@
                 return soonest.length > 0 ? soonest[0] : null;
             }, [top10SoonEvents, now]);
 
+            const formatDiscordClock = (ts) => {
+                const d = new Date(ts);
+                return `${d.getHours().toString().padStart(2, '0')}：${d.getMinutes().toString().padStart(2, '0')}`;
+            };
+
             const buildDiscordBossMessage = (event, options = {}) => {
-                const { isTest = false, leadMinutes = notifyLeadMinutes } = options;
-                if (!event) {
-                    return isTest ? "【LORD NINE】Discord通知テスト" : `【LORD NINE】${leadMinutes}分前通知`;
-                }
-                const locationText = [event.bigArea, event.area].filter(Boolean).join(" / ");
-                const detailText = [`Lv.${event.lv}`, locationText].filter(Boolean).join(" / ");
-                return [
-                    isTest ? "【LORD NINE】Discord通知テスト" : `【LORD NINE】${leadMinutes}分前通知`,
-                    `${event.name} が ${formatPredictedTime(event.eventTime)} に出現予定`,
-                    detailText
-                ].filter(Boolean).join("\n");
+                const { isAuto = false } = options;
+                if (!event) return "";
+                const detailText = [`Lv${event.lv}`, event.bigArea, event.area].filter(Boolean).join("/");
+                const line = `${formatDiscordClock(event.eventTime)}　${event.name}（${detailText}）`;
+                return isAuto ? `${line}\n※自動更新` : line;
             };
 
             const postDiscordMessage = async (content) => {
@@ -1020,9 +1019,14 @@
                     return;
                 }
                 const targetEvent = globalMostRecent || top10SoonEvents[0];
+                const message = buildDiscordBossMessage(targetEvent);
+                if (!message) {
+                    showToast("送信できるボスがありません。", "warning");
+                    return;
+                }
                 setIsDiscordSending(true);
                 try {
-                    await postDiscordMessage(buildDiscordBossMessage(targetEvent, { isTest: true }));
+                    await postDiscordMessage(message);
                     showToast("Discordにテスト通知を送信しました。", "success");
                 } catch (error) {
                     console.warn("Discord notification failed.", error);
@@ -1060,7 +1064,7 @@
 
                     if (!shouldSend) return true;
                     reserved = true;
-                    await postDiscordMessage(buildDiscordBossMessage(event, { leadMinutes: notifyLeadMinutes }));
+                    await postDiscordMessage(buildDiscordBossMessage(event, { isAuto: true }));
                     await docRef.set({
                         status: "sent",
                         sentAt: Date.now(),
